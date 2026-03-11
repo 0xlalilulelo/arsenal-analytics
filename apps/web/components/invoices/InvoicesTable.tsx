@@ -8,8 +8,8 @@ import { classifyAgingBucket } from '@mro/core';
 export type InvoiceRow = {
   id: string;
   invoiceNumber: string;
-  customer: { name: string; accountNumber: string };
-  workOrder?: { woNumber: string } | null;
+  customer: { name: string; accountNumber: string | null };
+  workOrder?: { number: string } | null;
   status: string;
   issueDate: string | null;
   dueDate: string | null;
@@ -20,11 +20,12 @@ export type InvoiceRow = {
 
 const STATUS_VARIANT: Record<string, 'complete' | 'in-progress' | 'open' | 'aog' | 'default'> = {
   PAID: 'complete',
-  PARTIALLY_PAID: 'in-progress',
+  PARTIAL: 'in-progress',
   SENT: 'default',
+  VIEWED: 'default',
   OVERDUE: 'aog',
   DRAFT: 'open',
-  VOIDED: 'open',
+  VOID: 'open',
 };
 
 const AGING_COLORS: Record<string, string> = {
@@ -85,7 +86,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                 <p className="text-xs text-content-muted">{inv.customer.accountNumber}</p>
               </td>
               <td className="py-3 px-4 font-mono text-xs text-content-secondary">
-                {inv.workOrder?.woNumber ?? '—'}
+                {inv.workOrder?.number ?? '—'}
               </td>
               <td className="py-3 px-4">
                 <Badge variant={STATUS_VARIANT[inv.status] ?? 'default'}>
@@ -99,7 +100,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                 <p className="text-content-secondary">
                   {inv.dueDate ? formatDate(inv.dueDate) : '—'}
                 </p>
-                {inv.status !== 'PAID' && inv.status !== 'DRAFT' && (
+                {inv.status !== 'PAID' && inv.status !== 'DRAFT' && inv.status !== 'VOID' && (
                   <AgingBadge dueDate={inv.dueDate} />
                 )}
               </td>

@@ -1,96 +1,37 @@
 'use client';
 import { useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { InvoicesTable, type InvoiceRow } from '@/components/invoices/InvoicesTable';
+import { InvoicesTable } from '@/components/invoices/InvoicesTable';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, Search, Filter } from 'lucide-react';
+import { useInvoices } from '@/hooks/useInvoices';
+import { Plus, Search, Filter, Loader2 } from 'lucide-react';
 
-const DEMO_INVOICES: InvoiceRow[] = [
-  {
-    id: 'inv-1',
-    invoiceNumber: 'INV-2026-0001',
-    customer: { name: 'Robert Harrington', accountNumber: 'C-0001' },
-    workOrder: { woNumber: 'WO-2026-0041' },
-    status: 'SENT',
-    invoiceDate: '2026-01-20',
-    dueDate: '2026-02-19',
-    totalAmount: 2187.50,
-    paidAmount: 0,
-    balanceDue: 2187.50,
-  },
-  {
-    id: 'inv-2',
-    invoiceNumber: 'INV-2026-0002',
-    customer: { name: 'Skyline Charter LLC', accountNumber: 'C-0002' },
-    workOrder: { woNumber: 'WO-2026-0039' },
-    status: 'PARTIALLY_PAID',
-    invoiceDate: '2026-01-15',
-    dueDate: '2026-01-30',
-    totalAmount: 5840.00,
-    paidAmount: 2000.00,
-    balanceDue: 3840.00,
-  },
-  {
-    id: 'inv-3',
-    invoiceNumber: 'INV-2025-0092',
-    customer: { name: 'Pacific Aero Club', accountNumber: 'C-0003' },
-    workOrder: null,
-    status: 'OVERDUE',
-    invoiceDate: '2025-11-01',
-    dueDate: '2025-12-01',
-    totalAmount: 892.50,
-    paidAmount: 0,
-    balanceDue: 892.50,
-  },
-  {
-    id: 'inv-4',
-    invoiceNumber: 'INV-2025-0089',
-    customer: { name: 'Robert Harrington', accountNumber: 'C-0001' },
-    workOrder: { woNumber: 'WO-2025-0035' },
-    status: 'PAID',
-    invoiceDate: '2025-12-20',
-    dueDate: '2026-01-19',
-    totalAmount: 1875.00,
-    paidAmount: 1875.00,
-    balanceDue: 0,
-  },
-  {
-    id: 'inv-5',
-    invoiceNumber: 'INV-2026-0003',
-    customer: { name: 'Skyline Charter LLC', accountNumber: 'C-0002' },
-    workOrder: { woNumber: 'WO-2026-0044' },
-    status: 'DRAFT',
-    invoiceDate: null,
-    dueDate: null,
-    totalAmount: 3200.00,
-    paidAmount: 0,
-    balanceDue: 3200.00,
-  },
-];
-
-const STATUS_FILTERS = ['All', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'];
+const STATUS_FILTERS = ['All', 'DRAFT', 'SENT', 'VIEWED', 'PARTIAL', 'OVERDUE', 'PAID'];
 
 export default function InvoicesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
 
-  const filtered = DEMO_INVOICES.filter(inv => {
-    const matchesSearch =
-      !search ||
-      inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
-      inv.customer.name.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || inv.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const { data, isLoading } = useInvoices({
+    status: statusFilter === 'All' ? undefined : statusFilter,
   });
 
-  // AR aging summary
-  const openInvoices = DEMO_INVOICES.filter(inv => inv.status !== 'PAID' && inv.status !== 'DRAFT' && inv.status !== 'VOIDED');
-  const totalAr = openInvoices.reduce((s, inv) => s + inv.balanceDue, 0);
-  const overdueAmount = DEMO_INVOICES.filter(inv => inv.status === 'OVERDUE').reduce((s, inv) => s + inv.balanceDue, 0);
+  const invoices = data?.data ?? [];
+
+  const filtered = search
+    ? invoices.filter(inv =>
+        inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
+        inv.customer.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : invoices;
+
+  const openInvoices = invoices.filter(inv => inv.status !== 'PAID' && inv.status !== 'DRAFT' && inv.status !== 'VOID');
+  const totalAr = openInvoices.reduce((s, inv) => s + inv.balance, 0);
+  const overdueAmount = invoices.filter(inv => inv.status === 'OVERDUE').reduce((s, inv) => s + inv.balance, 0);
+  const draftCount = invoices.filter(i => i.status === 'DRAFT').length;
 
   return (
     <div className="flex flex-col h-full">
@@ -111,7 +52,7 @@ export default function InvoicesPage() {
             { label: 'Total AR', value: formatCurrency(totalAr), color: 'text-intent-warning' },
             { label: 'Overdue', value: formatCurrency(overdueAmount), color: 'text-intent-danger' },
             { label: 'Open Invoices', value: openInvoices.length, color: 'text-content-primary' },
-            { label: 'Draft', value: DEMO_INVOICES.filter(i => i.status === 'DRAFT').length, color: 'text-content-muted' },
+            { label: 'Draft', value: draftCount, color: 'text-content-muted' },
           ].map(({ label, value, color }) => (
             <Card key={label}>
               <CardContent className="pt-4 pb-4">
@@ -149,7 +90,13 @@ export default function InvoicesPage() {
           ))}
         </div>
 
-        <InvoicesTable invoices={filtered} />
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-content-muted" />
+          </div>
+        ) : (
+          <InvoicesTable invoices={filtered} />
+        )}
       </div>
     </div>
   );

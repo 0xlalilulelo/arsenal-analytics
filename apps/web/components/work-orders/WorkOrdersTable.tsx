@@ -5,23 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { Search, Plus, ChevronRight } from 'lucide-react';
+import { Search, Plus, ChevronRight, Loader2 } from 'lucide-react';
 import type { BadgeProps } from '@/components/ui/badge';
-
-export interface WorkOrderSummary {
-  id: string;
-  number: string;
-  type: string;
-  status: string;
-  customerName: string;
-  nNumber: string;
-  aircraftModel: string;
-  billingModel: string;
-  estimatedTotal: number | null;
-  actualTotal: number | null;
-  dateOpened: string;
-  estimatedClose: string | null;
-}
+import { useWorkOrders } from '@/hooks/useWorkOrders';
+import type { WorkOrderSummary } from '@/hooks/useWorkOrders';
 
 const STATUS_LABEL: Record<string, string> = {
   OPEN: 'Open',
@@ -41,14 +28,6 @@ function statusVariant(status: string): BadgeProps['variant'] {
   return map[status] ?? 'default';
 }
 
-const DEMO_WORK_ORDERS: WorkOrderSummary[] = [
-  { id: 'wo-aog', number: 'WO-2025-0042', type: 'AOG', status: 'IN_PROGRESS', customerName: 'Apex Air Charter LLC', nNumber: 'N841QA', aircraftModel: 'A36 Bonanza', billingModel: 'TIME_AND_MATERIALS', estimatedTotal: 3200, actualTotal: null, dateOpened: '2025-01-15', estimatedClose: '2025-01-16' },
-  { id: 'wo-1',   number: 'WO-2025-0041', type: 'INSPECTION', status: 'IN_PROGRESS', customerName: 'Robert Harrington', nNumber: 'N5572K', aircraftModel: '172S Skyhawk', billingModel: 'HYBRID', estimatedTotal: 2850, actualTotal: null, dateOpened: '2025-01-13', estimatedClose: '2025-01-20' },
-  { id: 'wo-2',   number: 'WO-2025-0043', type: 'SCHEDULED', status: 'AWAITING_PARTS', customerName: 'Apex Air Charter LLC', nNumber: 'N841QA', aircraftModel: 'A36 Bonanza', billingModel: 'TIME_AND_MATERIALS', estimatedTotal: 4200, actualTotal: null, dateOpened: '2025-01-12', estimatedClose: '2025-01-25' },
-  { id: 'wo-3',   number: 'WO-2025-0039', type: 'SCHEDULED', status: 'COMPLETE', customerName: 'Patricia Okonkwo', nNumber: 'N2207X', aircraftModel: 'PA-28-181 Archer', billingModel: 'TIME_AND_MATERIALS', estimatedTotal: 1850, actualTotal: 2165, dateOpened: '2025-01-05', estimatedClose: '2025-01-10' },
-  { id: 'wo-4',   number: 'WO-2025-0035', type: 'INSPECTION', status: 'CLOSED', customerName: 'Hill Country Flying Club', nNumber: 'N8854T', aircraftModel: '182T Skylane', billingModel: 'FLAT_RATE', estimatedTotal: 1875, actualTotal: 1875, dateOpened: '2024-12-15', estimatedClose: '2024-12-22' },
-];
-
 const STATUS_FILTERS = ['All', 'OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
 const TYPE_FILTERS = ['All', 'AOG', 'INSPECTION', 'SCHEDULED', 'UNSCHEDULED'];
 
@@ -57,15 +36,14 @@ export function WorkOrdersTable() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
 
-  const filtered = DEMO_WORK_ORDERS.filter(wo => {
-    const matchSearch = !search ||
-      wo.number.toLowerCase().includes(search.toLowerCase()) ||
-      wo.nNumber.toLowerCase().includes(search.toLowerCase()) ||
-      wo.customerName.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All' || wo.status === statusFilter;
-    const matchType   = typeFilter === 'All'   || wo.type === typeFilter;
-    return matchSearch && matchStatus && matchType;
+  const { data, isLoading, isError } = useWorkOrders({
+    status: statusFilter === 'All' ? undefined : statusFilter,
+    type: typeFilter === 'All' ? undefined : typeFilter,
+    search: search || undefined,
   });
+
+  const workOrders = data?.data ?? [];
+  const total = data?.total ?? 0;
 
   return (
     <div className="space-y-4">
@@ -143,7 +121,21 @@ export function WorkOrdersTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-hover">
-            {filtered.map(wo => (
+            {isLoading && (
+              <tr>
+                <td colSpan={8} className="py-12 text-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-content-muted mx-auto" />
+                </td>
+              </tr>
+            )}
+            {isError && (
+              <tr>
+                <td colSpan={8} className="py-12 text-center text-sm text-intent-danger">
+                  Failed to load work orders.
+                </td>
+              </tr>
+            )}
+            {!isLoading && workOrders.map(wo => (
               <tr key={wo.id} className="hover:bg-surface-hover/40 transition-colors group">
                 <td className="py-3 px-4">
                   <Link href={`/work-orders/${wo.id}`} className="font-mono text-xs font-semibold text-intent-primary hover:underline">
@@ -151,8 +143,8 @@ export function WorkOrdersTable() {
                   </Link>
                 </td>
                 <td className="py-3 px-4">
-                  <p className="text-xs font-medium text-content-primary">{wo.customerName}</p>
-                  <p className="font-mono text-xs text-content-muted">{wo.nNumber} · {wo.aircraftModel}</p>
+                  <p className="text-xs font-medium text-content-primary">{wo.customer.name}</p>
+                  <p className="font-mono text-xs text-content-muted">{wo.aircraft.nNumber} · {wo.aircraft.make} {wo.aircraft.model}</p>
                 </td>
                 <td className="py-3 px-4">
                   {wo.type === 'AOG'
@@ -187,7 +179,7 @@ export function WorkOrdersTable() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {!isLoading && !isError && workOrders.length === 0 && (
               <tr>
                 <td colSpan={8} className="py-12 text-center text-sm text-content-muted">
                   No work orders match your filters.
@@ -198,7 +190,7 @@ export function WorkOrdersTable() {
         </table>
       </div>
 
-      <p className="text-xs text-content-muted">{filtered.length} of {DEMO_WORK_ORDERS.length} work orders</p>
+      <p className="text-xs text-content-muted">{workOrders.length} of {total} work orders</p>
     </div>
   );
 }

@@ -48,10 +48,25 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerId, aircraftId, type = 'SCHEDULED', notes, estimatedClose, billingModel = 'TIME_AND_MATERIALS', lineItems = [] } = body;
+    const { customerId, aircraftId, nNumber, type = 'SCHEDULED', notes, estimatedClose, billingModel = 'TIME_AND_MATERIALS', lineItems = [] } = body;
 
     const orgId = await resolveOrgId();
     if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+
+    // Resolve aircraft: prefer explicit aircraftId, fall back to nNumber lookup/create
+    let resolvedAircraftId = aircraftId;
+    if (!resolvedAircraftId && nNumber) {
+      const existing = await prisma.aircraft.findFirst({ where: { nNumber: nNumber.toUpperCase() } });
+      if (existing) {
+        resolvedAircraftId = existing.id;
+      } else {
+        const created = await prisma.aircraft.create({
+          data: { nNumber: nNumber.toUpperCase(), make: 'Unknown', model: 'Unknown', serial: 'UNKNOWN', customerId },
+        });
+        resolvedAircraftId = created.id;
+      }
+    }
+    if (!resolvedAircraftId) return NextResponse.json({ error: 'Aircraft required' }, { status: 422 });
 
     const laborRate = await prisma.laborRate.findFirst({ where: { orgId, isDefault: true }, select: { id: true, rate: true } });
     if (!laborRate) return NextResponse.json({ error: 'No default labor rate' }, { status: 422 });
@@ -61,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const wo = await prisma.workOrder.create({
       data: {
-        orgId, number, type, customerId, aircraftId,
+        orgId, number, type, customerId, aircraftId: resolvedAircraftId,
         laborRateId: laborRate.id, billingModel, notes,
         estimatedClose: estimatedClose ? new Date(estimatedClose) : null,
         lineItems: {

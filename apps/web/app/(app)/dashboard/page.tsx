@@ -1,83 +1,82 @@
+'use client';
 import { Topbar } from '@/components/layout/Topbar';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
 import { ArAgingChart } from '@/components/dashboard/ArAgingChart';
 import { ActiveWorkOrders } from '@/components/dashboard/ActiveWorkOrders';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useKpiMetrics } from '@/hooks/useAnalytics';
+import { formatCurrency } from '@/lib/utils';
 import {
-  ClipboardList,
-  DollarSign,
-  Clock,
-  TrendingUp,
-  AlertCircle,
-  Wrench,
-  BarChart2,
-  Package,
+  ClipboardList, DollarSign, Clock, TrendingUp,
+  AlertCircle, Wrench, BarChart2, Package,
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { data: kpiResp } = useKpiMetrics();
+  const kpi = kpiResp?.data;
+
+  const revDeltaPct = kpi
+    ? kpi.revenueLastMonth > 0
+      ? ((kpi.revenueThisMonth - kpi.revenueLastMonth) / kpi.revenueLastMonth * 100).toFixed(1)
+      : null
+    : null;
+
+  const aging = kpi?.agingBuckets;
+
   return (
     <div className="flex flex-col h-full">
-      <Topbar
-        title="Dashboard"
-        subtitle="Skyline Aviation Services · Jan 15, 2025"
-      />
+      <Topbar title="Dashboard" subtitle="Arsenal Aviation Services" />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* ─── KPI Row ─── */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <KpiCard
             title="Active Work Orders"
-            value="8"
-            subvalue="2 AOG · 3 Inspection"
+            value={kpi ? String(kpi.activeWoCount) : '—'}
+            subvalue={kpi ? `${kpi.aogCount} AOG` : 'Loading…'}
             icon={ClipboardList}
             intent="primary"
-            tooltip="Total open work orders by status"
-          />
-          <KpiCard
-            title="WIP Value"
-            value="$142,800"
-            subvalue="Estimated at completion"
-            delta="+12.4%"
-            deltaLabel="vs last month"
-            deltaPositive={true}
-            icon={DollarSign}
-            intent="gold"
-            tooltip="Total unbilled value of all open work orders"
+            tooltip="Total open work orders"
           />
           <KpiCard
             title="MTD Revenue"
-            value="$76,300"
-            subvalue="$92,100 target"
-            delta="–17.2%"
+            value={kpi ? formatCurrency(kpi.revenueThisMonth) : '—'}
+            subvalue={kpi ? `Last month: ${formatCurrency(kpi.revenueLastMonth)}` : ''}
+            delta={revDeltaPct ? `${Number(revDeltaPct) >= 0 ? '+' : ''}${revDeltaPct}%` : undefined}
             deltaLabel="vs last month"
-            deltaPositive={false}
+            deltaPositive={revDeltaPct ? Number(revDeltaPct) >= 0 : undefined}
             icon={TrendingUp}
             intent="success"
             tooltip="Month-to-date invoiced revenue"
           />
           <KpiCard
             title="AR Outstanding"
-            value="$42,782"
-            subvalue="$892 overdue 90+"
+            value={kpi ? formatCurrency(kpi.arTotal) : '—'}
+            subvalue={aging ? `$${((aging['61_90'] + aging['90_PLUS']) / 1000).toFixed(1)}K overdue 60+` : ''}
             icon={AlertCircle}
             intent="warning"
             tooltip="Total outstanding accounts receivable"
           />
           <KpiCard
+            title="WIP Value"
+            value="—"
+            subvalue="Estimated at completion"
+            icon={DollarSign}
+            intent="gold"
+            tooltip="Total unbilled value of all open work orders"
+          />
+          <KpiCard
             title="Labor Utilization"
-            value="73.4%"
+            value="—"
             subvalue="Target: 70–85%"
-            delta="+2.1%"
-            deltaLabel="vs last 2 weeks"
-            deltaPositive={true}
             icon={Clock}
             intent="success"
             tooltip="Billable hours as % of total available hours"
           />
           <KpiCard
             title="Parts Margin"
-            value="38.2%"
+            value="—"
             subvalue="Target: 35–50%"
             icon={Package}
             intent="primary"
@@ -85,7 +84,7 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="Avg Invoice Age"
-            value="24 days"
+            value="—"
             subvalue="Net 30 terms"
             icon={BarChart2}
             intent="muted"
@@ -93,11 +92,11 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="Technicians On Jobs"
-            value="3 / 4"
-            subvalue="Marcus, Sarah, Diego"
+            value="—"
+            subvalue="Active technicians"
             icon={Wrench}
             intent="primary"
-            tooltip="Active technicians currently clocked in on jobs"
+            tooltip="Technicians currently clocked in on jobs"
           />
         </div>
 
@@ -105,10 +104,10 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-content-secondary">Revenue vs. COGS — 12 Months</CardTitle>
+              <CardTitle className="text-sm text-content-secondary">Revenue — 12 Months</CardTitle>
             </CardHeader>
             <CardContent>
-              <RevenueChart />
+              <RevenueChart data={kpi?.monthlyRevenue} />
             </CardContent>
           </Card>
 
@@ -129,21 +128,25 @@ export default function DashboardPage() {
               <CardTitle className="text-sm text-content-secondary">AR Aging</CardTitle>
             </CardHeader>
             <CardContent>
-              <ArAgingChart />
-              <div className="mt-3 grid grid-cols-5 gap-2 text-center">
-                {[
-                  { label: 'Current', amount: '$18.4K', color: 'text-intent-success' },
-                  { label: '1–30',    amount: '$12.5K', color: 'text-intent-primary' },
-                  { label: '31–60',   amount: '$7.2K',  color: 'text-intent-warning' },
-                  { label: '61–90',   amount: '$3.8K',  color: 'text-intent-danger' },
-                  { label: '90+',     amount: '$0.9K',  color: 'text-intent-danger' },
-                ].map(({ label, amount, color }) => (
-                  <div key={label}>
-                    <p className="text-xs text-content-muted">{label}</p>
-                    <p className={`font-mono text-xs font-semibold ${color}`}>{amount}</p>
-                  </div>
-                ))}
-              </div>
+              <ArAgingChart buckets={kpi?.agingBuckets} />
+              {aging && (
+                <div className="mt-3 grid grid-cols-5 gap-2 text-center">
+                  {[
+                    { label: 'Current', amount: aging.CURRENT,    color: 'text-intent-success' },
+                    { label: '1–30',    amount: aging['1_30'],     color: 'text-intent-primary' },
+                    { label: '31–60',   amount: aging['31_60'],    color: 'text-intent-warning' },
+                    { label: '61–90',   amount: aging['61_90'],    color: 'text-intent-danger' },
+                    { label: '90+',     amount: aging['90_PLUS'],  color: 'text-intent-danger' },
+                  ].map(({ label, amount, color }) => (
+                    <div key={label}>
+                      <p className="text-xs text-content-muted">{label}</p>
+                      <p className={`font-mono text-xs font-semibold ${color}`}>
+                        ${(amount / 1000).toFixed(1)}K
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -153,21 +156,27 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-4">
               <ul className="space-y-3">
-                {[
-                  { label: 'Squawk awaiting customer approval', sub: 'WO-2025-0041 · Nose gear shimmy dampener', color: 'bg-intent-warning' },
-                  { label: 'Invoice draft ready to send', sub: 'WO-2025-0039 · Patricia Okonkwo · $2,165', color: 'bg-intent-primary' },
-                  { label: 'AOG parts shipment expected', sub: 'PO-2025-0019 · Slick M4371 · Aviall · Jan 16', color: 'bg-intent-danger' },
-                  { label: 'AD compliance overdue', sub: 'N2207X · Cessna SEB95-4 · 15 days past due', color: 'bg-intent-danger' },
-                  { label: 'Invoice 60+ days overdue', sub: 'INV-2024-0081 · Patricia Okonkwo · $892.50', color: 'bg-intent-danger' },
-                ].map(({ label, sub, color }, i) => (
-                  <li key={i} className="flex gap-3 items-start">
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${color}`} />
+                {kpi && kpi.aogCount > 0 && (
+                  <li className="flex gap-3 items-start">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-intent-danger" />
                     <div>
-                      <p className="text-xs font-medium text-content-primary">{label}</p>
-                      <p className="text-xs text-content-muted">{sub}</p>
+                      <p className="text-xs font-medium text-content-primary">AOG aircraft requires immediate attention</p>
+                      <p className="text-xs text-content-muted">{kpi.aogCount} AOG work order{kpi.aogCount > 1 ? 's' : ''} open</p>
                     </div>
                   </li>
-                ))}
+                )}
+                {aging && (aging['61_90'] + aging['90_PLUS']) > 0 && (
+                  <li className="flex gap-3 items-start">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-intent-danger" />
+                    <div>
+                      <p className="text-xs font-medium text-content-primary">Invoices overdue 60+ days</p>
+                      <p className="text-xs text-content-muted">{formatCurrency(aging['61_90'] + aging['90_PLUS'])} outstanding</p>
+                    </div>
+                  </li>
+                )}
+                {!kpi && (
+                  <li className="text-xs text-content-muted py-4 text-center">Loading…</li>
+                )}
               </ul>
             </CardContent>
           </Card>

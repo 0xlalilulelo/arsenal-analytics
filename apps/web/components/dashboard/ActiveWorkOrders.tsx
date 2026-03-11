@@ -1,47 +1,30 @@
+'use client';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { useWorkOrders } from '@/hooks/useWorkOrders';
 import type { BadgeProps } from '@/components/ui/badge';
-
-interface WorkOrderRow {
-  id: string;
-  number: string;
-  type: string;
-  status: string;
-  customer: string;
-  aircraft: string;
-  estimatedTotal: number | null;
-  dateOpened: string;
-}
 
 function statusVariant(status: string): BadgeProps['variant'] {
   const map: Record<string, BadgeProps['variant']> = {
-    OPEN: 'open',
-    IN_PROGRESS: 'in-progress',
-    AWAITING_PARTS: 'awaiting-parts',
-    AWAITING_APPROVAL: 'awaiting-approval',
-    COMPLETE: 'complete',
-    INVOICED: 'invoiced',
-    CLOSED: 'closed',
+    OPEN: 'open', IN_PROGRESS: 'in-progress', AWAITING_PARTS: 'awaiting-parts',
+    AWAITING_APPROVAL: 'awaiting-approval', COMPLETE: 'complete', INVOICED: 'invoiced', CLOSED: 'closed',
   };
   return map[status] ?? 'default';
 }
 
-function statusLabel(status: string): string {
-  return status.replace(/_/g, ' ');
-}
-
-const mockWorkOrders: WorkOrderRow[] = [
-  { id: 'wo-aog', number: 'WO-2025-0042', type: 'AOG', status: 'IN_PROGRESS', customer: 'Apex Air Charter LLC', aircraft: 'N841QA', estimatedTotal: 3200, dateOpened: '2025-01-15' },
-  { id: 'wo-1',   number: 'WO-2025-0041', type: 'INSPECTION', status: 'IN_PROGRESS', customer: 'Robert Harrington', aircraft: 'N5572K', estimatedTotal: 2850, dateOpened: '2025-01-13' },
-  { id: 'wo-2',   number: 'WO-2025-0043', type: 'SCHEDULED', status: 'AWAITING_PARTS', customer: 'Apex Air Charter LLC', aircraft: 'N841QA', estimatedTotal: 4200, dateOpened: '2025-01-12' },
-  { id: 'wo-3',   number: 'WO-2025-0039', type: 'SCHEDULED', status: 'COMPLETE', customer: 'Patricia Okonkwo', aircraft: 'N2207X', estimatedTotal: 2165, dateOpened: '2025-01-05' },
-];
-
 export function ActiveWorkOrders() {
+  const { data, isLoading } = useWorkOrders({ status: 'IN_PROGRESS', limit: 6 });
+  const workOrders = data?.data ?? [];
+
+  if (isLoading) {
+    return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-content-muted" /></div>;
+  }
+
   return (
     <div className="divide-y divide-surface-hover">
-      {mockWorkOrders.map((wo) => (
+      {workOrders.map((wo) => (
         <Link
           key={wo.id}
           href={`/work-orders/${wo.id}`}
@@ -53,11 +36,13 @@ export function ActiveWorkOrders() {
               {wo.type === 'AOG' && <Badge variant="aog">AOG</Badge>}
               {wo.type === 'INSPECTION' && <Badge variant="inspection">Annual</Badge>}
             </div>
-            <p className="text-xs text-content-secondary truncate">{wo.customer} · {wo.aircraft}</p>
+            <p className="text-xs text-content-secondary truncate">
+              {wo.customer.name} · {wo.aircraft.nNumber}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <Badge variant={statusVariant(wo.status)} className="mb-1">
-              {statusLabel(wo.status)}
+              {wo.status.replace(/_/g, ' ')}
             </Badge>
             {wo.estimatedTotal && (
               <p className="font-mono text-xs text-content-muted">{formatCurrency(wo.estimatedTotal)}</p>
@@ -65,6 +50,9 @@ export function ActiveWorkOrders() {
           </div>
         </Link>
       ))}
+      {workOrders.length === 0 && (
+        <p className="py-8 text-center text-xs text-content-muted">No active work orders</p>
+      )}
     </div>
   );
 }

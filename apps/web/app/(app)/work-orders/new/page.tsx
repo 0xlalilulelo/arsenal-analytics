@@ -78,7 +78,7 @@ export default function NewWorkOrderPage() {
     // Look up aircraft by nNumber to get its id — simplified: pass nNumber and resolve server-side
     const result = await createWo({
       ...values,
-      aircraftId: values.nNumber, // server resolves by nNumber
+      nNumber: values.nNumber,
       lineItems: lineItems.filter(li => li.description.trim()),
     });
     router.push(`/work-orders/${result.data.id}`);
