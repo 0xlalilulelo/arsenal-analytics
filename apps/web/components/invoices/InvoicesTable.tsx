@@ -11,11 +11,11 @@ export type InvoiceRow = {
   customer: { name: string; accountNumber: string };
   workOrder?: { woNumber: string } | null;
   status: string;
-  invoiceDate: string | null;
+  issueDate: string | null;
   dueDate: string | null;
-  totalAmount: number;
-  paidAmount: number;
-  balanceDue: number;
+  total: number;
+  amountPaid: number;
+  balance: number;
 };
 
 const STATUS_VARIANT: Record<string, 'complete' | 'in-progress' | 'open' | 'aog' | 'default'> = {
@@ -93,7 +93,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                 </Badge>
               </td>
               <td className="py-3 px-4 text-xs text-content-secondary">
-                {inv.invoiceDate ? formatDate(inv.invoiceDate) : '—'}
+                {inv.issueDate ? formatDate(inv.issueDate) : '—'}
               </td>
               <td className="py-3 px-4 text-xs">
                 <p className="text-content-secondary">
@@ -104,14 +104,14 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                 )}
               </td>
               <td className="py-3 px-4 text-right font-mono text-xs text-content-primary">
-                {formatCurrency(inv.totalAmount)}
+                {formatCurrency(inv.total)}
               </td>
               <td className="py-3 px-4 text-right font-mono text-xs text-intent-success">
-                {inv.paidAmount > 0 ? formatCurrency(inv.paidAmount) : '—'}
+                {inv.amountPaid > 0 ? formatCurrency(inv.amountPaid) : '—'}
               </td>
               <td className="py-3 px-4 text-right font-mono text-xs font-semibold">
-                <span className={inv.balanceDue > 0 ? 'text-intent-warning' : 'text-content-muted'}>
-                  {inv.balanceDue > 0 ? formatCurrency(inv.balanceDue) : '—'}
+                <span className={inv.balance > 0 ? 'text-intent-warning' : 'text-content-muted'}>
+                  {inv.balance > 0 ? formatCurrency(inv.balance) : '—'}
                 </span>
               </td>
               <td className="py-3 px-4">

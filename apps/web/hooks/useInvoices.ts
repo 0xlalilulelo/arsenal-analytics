@@ -1,0 +1,63 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export type InvoiceSummary = {
+  id: string;
+  invoiceNumber: string;
+  customer: { name: string; accountNumber: string | null };
+  workOrder: { number: string } | null;
+  status: string;
+  issueDate: string;
+  dueDate: string;
+  total: number;
+  amountPaid: number;
+  balance: number;
+};
+
+async function fetchInvoices(filters: { status?: string; customerId?: string; page?: number } = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.customerId) params.set('customerId', filters.customerId);
+  if (filters.page) params.set('page', String(filters.page));
+  const res = await fetch(`/api/invoices?${params}`);
+  if (!res.ok) throw new Error('Failed to fetch invoices');
+  return res.json();
+}
+
+export function useInvoices(filters: { status?: string; customerId?: string; page?: number } = {}) {
+  return useQuery({
+    queryKey: ['invoices', filters],
+    queryFn: () => fetchInvoices(filters),
+  });
+}
+
+export function useInvoiceDetail(id: string) {
+  return useQuery({
+    queryKey: ['invoice', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/invoices/${id}`);
+      if (!res.ok) throw new Error('Invoice not found');
+      return res.json().then((r: { data: unknown }) => r.data);
+    },
+    enabled: !!id,
+  });
+}
+
+export function useRecordPayment(invoiceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { amount: number; method: string; reference?: string; memo?: string }) => {
+      const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to record payment');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
+  });
+}

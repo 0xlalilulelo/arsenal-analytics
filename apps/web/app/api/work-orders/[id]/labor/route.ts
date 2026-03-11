@@ -4,71 +4,73 @@ import { roundToQuarterHour } from '@mro/core';
 
 type Params = { params: { id: string } };
 
-// POST /api/work-orders/[id]/labor — clock in or create labor entry
 export async function POST(request: NextRequest, { params }: Params) {
   try {
     const body = await request.json();
-    const { technicianId, clockIn, clockOut, notes, lineItemId, isBillable = true } = body;
+    const { technicianId, date, hours, description, lineItemId, billable = true } = body;
 
-    const technician = await prisma.technician.findUnique({
+    const tech = await prisma.technician.findUnique({
       where: { id: technicianId },
-      select: { billingRate: true, costRate: true, aogBillingRate: true },
+      select: { billRate: true },
     });
+    if (!tech) return NextResponse.json({ error: 'Technician not found' }, { status: 404 });
 
-    if (!technician) {
-      return NextResponse.json({ error: 'Technician not found' }, { status: 404 });
-    }
-
-    const workOrder = await prisma.workOrder.findUnique({
+    const wo = await prisma.workOrder.findUnique({
       where: { id: params.id },
-      select: { type: true },
+      include: { laborRate: { select: { multiplier: true } } },
     });
+    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 });
 
-    const isAog = workOrder?.type === 'AOG';
-    const billingRate = isAog
-      ? (technician.aogBillingRate ?? Number(technician.billingRate) * 1.5)
-      : technician.billingRate;
-
-    const clockInDate = new Date(clockIn);
-    const clockOutDate = clockOut ? new Date(clockOut) : null;
-
-    let billedHours: number | null = null;
-    let rawMinutes: number | null = null;
-    let totalBilled: number | null = null;
-    let totalCost: number | null = null;
-
-    if (clockOutDate) {
-      rawMinutes = Math.round((clockOutDate.getTime() - clockInDate.getTime()) / 60000);
-      billedHours = roundToQuarterHour(rawMinutes / 60);
-      totalBilled = billedHours * Number(billingRate);
-      totalCost = billedHours * Number(technician.costRate);
-    }
+    const multiplier = wo.laborRate.multiplier;
+    const rateUsed = tech.billRate * multiplier;
+    const billedHours = roundToQuarterHour(hours);
 
     const entry = await prisma.laborEntry.create({
       data: {
         workOrderId: params.id,
         lineItemId: lineItemId ?? null,
         technicianId,
-        clockIn: clockInDate,
-        clockOut: clockOutDate,
-        rawMinutes,
-        billedHours,
-        billingRate,
-        costRate: technician.costRate,
-        totalBilled,
-        totalCost,
-        isAog,
-        isBillable,
-        notes,
+        date: new Date(date),
+        hours: billedHours,
+        rateUsed,
+        billable,
+        description,
       },
-      include: {
-        technician: { select: { firstName: true, lastName: true } },
-      },
+      include: { technician: { select: { name: true } } },
     });
 
     return NextResponse.json({ data: entry }, { status: 201 });
-  } catch (error) {
-    console.error('POST /api/work-orders/[id]/labor error:', error);
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// PATCH /api/work-orders/[id]/labor — clock out (update clockOut on an entry)
+export async function PATCH(request: NextRequest, { params }: Params) {
+  try {
+    const body = await request.json();
+    const { entryId, clockOut } = body;
+
+    const entry = await prisma.laborEntry.findUnique({
+      where: { id: entryId },
+      include: { technician: { select: { billRate: true } } },
+    });
+    if (!entry) return NextResponse.json({ error: 'Labor entry not found' }, { status: 404 });
+    if (!entry.clockIn) return NextResponse.json({ error: 'No clock-in recorded' }, { status: 422 });
+
+    const clockOutDate = new Date(clockOut);
+    const rawMinutes = Math.round((clockOutDate.getTime() - entry.clockIn.getTime()) / 60000);
+    const billedHours = roundToQuarterHour(rawMinutes / 60);
+
+    const updated = await prisma.laborEntry.update({
+      where: { id: entryId },
+      data: { clockOut: clockOutDate, hours: billedHours },
+    });
+
+    return NextResponse.json({ data: updated });
+  } catch (e) {
+    console.error(e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

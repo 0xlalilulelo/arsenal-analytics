@@ -1,155 +1,118 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
-import { InvoiceStatus } from '@prisma/client';
+import type { InvoiceStatus } from '@prisma/client';
+import { addDays } from 'date-fns';
 
-// GET /api/invoices
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId') ?? 'demo-org';
-    const status = searchParams.get('status') as InvoiceStatus | null;
-    const customerId = searchParams.get('customerId');
-    const page = parseInt(searchParams.get('page') ?? '1');
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
+const TERMS_DAYS: Record<string, number> = { NET_15: 15, NET_30: 30, NET_45: 45, COD: 0, PREPAY: 0 };
 
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        orgId,
-        ...(status ? { status } : {}),
-        ...(customerId ? { customerId } : {}),
-      },
-      include: {
-        customer: { select: { name: true, accountNumber: true, billingTerms: true } },
-        workOrder: { select: { woNumber: true, title: true } },
-        _count: { select: { payments: true } },
-      },
-      orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    const total = await prisma.invoice.count({
-      where: { orgId, ...(status ? { status } : {}) },
-    });
-
-    return NextResponse.json({ data: invoices, total, page, limit });
-  } catch (error) {
-    console.error('GET /api/invoices error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+async function resolveOrgId() {
+  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  return org?.id ?? null;
 }
 
-// POST /api/invoices — generate draft invoice from a work order
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get('status') as InvoiceStatus | null;
+  const customerId = searchParams.get('customerId');
+  const page = parseInt(searchParams.get('page') ?? '1');
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
+
+  const orgId = await resolveOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+
+  const [invoices, total] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { orgId, ...(status ? { status } : {}), ...(customerId ? { customerId } : {}) },
+      include: {
+        customer: { select: { name: true, accountNumber: true, billingTerms: true } },
+        workOrder: { select: { number: true } },
+        _count: { select: { payments: true } },
+      },
+      orderBy: { issueDate: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.invoice.count({ where: { orgId, ...(status ? { status } : {}) } }),
+  ]);
+
+  return NextResponse.json({ data: invoices, total, page, limit });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { orgId = 'demo-org', workOrderId, customerId, taxRate = 0 } = body;
+    const { workOrderId, customerId, taxRate = 0 } = body;
 
-    // Generate invoice number
-    const year = new Date().getFullYear();
+    const orgId = await resolveOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+
+    const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { billingTerms: true } });
+    const terms = customer?.billingTerms ?? 'NET_30';
+    const issueDate = new Date();
+    const dueDate = addDays(issueDate, TERMS_DAYS[terms] ?? 30);
+
     const count = await prisma.invoice.count({ where: { orgId } });
-    const invoiceNumber = `INV-${year}-${String(count + 1).padStart(4, '0')}`;
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
-    // Pull unbilled labor and parts from work order
-    let lineItemsData: {
-      type: string;
-      description: string;
-      quantity: number;
-      unitPrice: number;
-      totalPrice: number;
-      isTaxable: boolean;
-      laborEntryId?: string;
-      partUsageId?: string;
-    }[] = [];
+    let lineItemsData: { category: string; description: string; qty: number; unitPrice: number; total: number; taxable: boolean }[] = [];
     let subtotal = 0;
 
     if (workOrderId) {
-      const laborEntries = await prisma.laborEntry.findMany({
-        where: { workOrderId, isBillable: true },
-        include: { technician: { select: { firstName: true, lastName: true } } },
+      const entries = await prisma.laborEntry.findMany({
+        where: { workOrderId, billable: true },
+        include: { technician: { select: { name: true } } },
       });
 
-      for (const entry of laborEntries) {
-        if (!entry.billedHours || !entry.totalBilled) continue;
-        const hrs = Number(entry.billedHours);
-        const rate = Number(entry.billingRate);
-        const total = Number(entry.totalBilled);
-        lineItemsData.push({
-          type: 'LABOR',
-          description: `Labor — ${entry.technician.firstName} ${entry.technician.lastName}${entry.isAog ? ' (AOG Rate)' : ''}`,
-          quantity: hrs,
-          unitPrice: rate,
-          totalPrice: total,
-          isTaxable: false,
-          laborEntryId: entry.id,
-        });
-        subtotal += total;
+      for (const e of entries) {
+        const t = e.hours * e.rateUsed;
+        lineItemsData.push({ category: 'LABOR', description: `Labor — ${e.technician.name}`, qty: e.hours, unitPrice: e.rateUsed, total: t, taxable: false });
+        subtotal += t;
       }
 
-      const partUsages = await prisma.partUsage.findMany({
-        where: { workOrderId, isBillable: true },
+      const partReqs = await prisma.partRequest.findMany({
+        where: { workOrderId, status: { in: ['INSTALLED', 'RECEIVED'] }, unitBillPrice: { not: null } },
       });
-
-      for (const usage of partUsages) {
-        const total = Number(usage.totalPrice);
-        lineItemsData.push({
-          type: 'PARTS',
-          description: `${usage.partNumber} — ${usage.description}`,
-          quantity: Number(usage.quantity),
-          unitPrice: Number(usage.unitPrice),
-          totalPrice: total,
-          isTaxable: true,
-          partUsageId: usage.id,
-        });
-        subtotal += total;
+      for (const p of partReqs) {
+        const t = p.qty * (p.unitBillPrice ?? 0);
+        lineItemsData.push({ category: 'PARTS', description: `${p.partNumber} — ${p.description}`, qty: p.qty, unitPrice: p.unitBillPrice ?? 0, total: t, taxable: true });
+        subtotal += t;
       }
     }
 
     const taxAmount = subtotal * taxRate;
-    const totalAmount = subtotal + taxAmount;
-
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
-      select: { billingTerms: true },
-    });
+    const total = subtotal + taxAmount;
 
     const invoice = await prisma.invoice.create({
       data: {
-        orgId,
-        invoiceNumber,
-        customerId,
+        orgId, invoiceNumber, customerId,
         workOrderId: workOrderId ?? null,
         status: 'DRAFT',
-        terms: customer?.billingTerms ?? 'NET30',
+        issueDate,
+        dueDate,
         subtotal,
         taxRate,
         taxAmount,
-        totalAmount,
-        balanceDue: totalAmount,
+        total,
+        amountPaid: 0,
+        balance: total,
         lineItems: {
           create: lineItemsData.map((li, idx) => ({
-            sortOrder: idx,
-            type: li.type as 'LABOR' | 'PARTS' | 'FLAT_RATE' | 'SHOP_SUPPLIES' | 'SUBTOTAL' | 'DISCOUNT' | 'OTHER',
+            category: li.category as 'LABOR' | 'PARTS' | 'SHOP_SUPPLIES' | 'FREIGHT' | 'HANDLING' | 'SUBCONTRACT' | 'OTHER',
             description: li.description,
-            quantity: li.quantity,
+            qty: li.qty,
             unitPrice: li.unitPrice,
-            totalPrice: li.totalPrice,
-            isTaxable: li.isTaxable,
-            laborEntryId: li.laborEntryId,
-            partUsageId: li.partUsageId,
+            total: li.total,
+            taxable: li.taxable,
+            sortOrder: idx,
           })),
         },
       },
-      include: {
-        lineItems: true,
-        customer: true,
-        workOrder: true,
-      },
+      include: { lineItems: true, customer: true, workOrder: true },
     });
 
     return NextResponse.json({ data: invoice }, { status: 201 });
-  } catch (error) {
-    console.error('POST /api/invoices error:', error);
+  } catch (e) {
+    console.error(e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,30 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-// GET /api/technicians
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId') ?? 'demo-org';
+export async function GET() {
+  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
-    const technicians = await prisma.technician.findMany({
-      where: { orgId, isActive: true },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        certifications: true,
-        billingRate: true,
-        costRate: true,
-        aogBillingRate: true,
-        certificateNumber: true,
-      },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    });
+  const technicians = await prisma.technician.findMany({
+    where: { orgId: org.id, active: true },
+    select: { id: true, name: true, certifications: true, billRate: true, costRate: true },
+    orderBy: { name: 'asc' },
+  });
 
-    return NextResponse.json({ data: technicians });
-  } catch (error) {
-    console.error('GET /api/technicians error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+  return NextResponse.json({ data: technicians });
 }

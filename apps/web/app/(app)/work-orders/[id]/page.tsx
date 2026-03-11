@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import { LogTimeDialog } from '@/components/labor/LogTimeDialog';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -78,6 +79,8 @@ const completionPct = Math.round((totalActualHours / (DEMO_WO.estimatedTotal / D
 
 export default function WorkOrderDetailPage() {
   const [squawkPanelOpen, setSquawkPanelOpen] = useState(false);
+  const [logTimeOpen, setLogTimeOpen] = useState(false);
+  const { id: workOrderId } = useParams<{ id: string }>();
   const pendingSquawks = DEMO_SQUAWKS.filter(s => s.status === 'PENDING_APPROVAL');
 
   return (
@@ -274,7 +277,7 @@ export default function WorkOrderDetailPage() {
                       <p className="font-mono text-lg font-bold text-content-secondary">{formatCurrency(estimatedTotalLaborBilled)}</p>
                     </div>
                   </div>
-                  <Button size="sm" className="h-8 text-xs">Log Time</Button>
+                  <Button size="sm" className="h-8 text-xs" onClick={() => setLogTimeOpen(true)}>Log Time</Button>
                 </div>
 
                 <div className="rounded-lg border border-surface-hover overflow-hidden">
@@ -412,6 +415,13 @@ export default function WorkOrderDetailPage() {
         onClose={() => setSquawkPanelOpen(false)}
         squawks={DEMO_SQUAWKS}
         workOrderNumber={DEMO_WO.number}
+      />
+
+      {/* Log Time dialog */}
+      <LogTimeDialog
+        open={logTimeOpen}
+        onClose={() => setLogTimeOpen(false)}
+        workOrderId={workOrderId}
       />
     </div>
   );
