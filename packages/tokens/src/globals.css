@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  /* ─── Surface scale (Palantir Blueprint dark) ─── */
+  --color-surface-base:    #111418;
+  --color-surface-primary: #1C2127;
+  --color-surface-panel:   #252A31;
+  --color-surface-card:    #2F343C;
+  --color-surface-hover:   #383E47;
+  --color-surface-active:  #404854;
+
+  /* ─── Content ─── */
+  --color-content-primary:   #F6F7F9;
+  --color-content-secondary: #ABB3BF;
+  --color-content-muted:     #738091;
+
+  /* ─── Intent (FAA-aligned color semantics) ─── */
+  --color-intent-primary: #4C90F0;
+  --color-intent-success: #32A467;
+  --color-intent-warning: #EC9A3C;
+  --color-intent-danger:  #E76A6E;
+  --color-intent-gold:    #D1980B;
+
+  /* ─── shadcn/ui compatible semantic tokens ─── */
+  --color-background: #1C2127;
+  --color-foreground: #F6F7F9;
+  --color-card: #2F343C;
+  --color-card-foreground: #F6F7F9;
+  --color-popover: #252A31;
+  --color-popover-foreground: #F6F7F9;
+  --color-primary: #4C90F0;
+  --color-primary-foreground: #111418;
+  --color-secondary: #383E47;
+  --color-secondary-foreground: #F6F7F9;
+  --color-muted: #252A31;
+  --color-muted-foreground: #738091;
+  --color-accent: #383E47;
+  --color-accent-foreground: #F6F7F9;
+  --color-destructive: #E76A6E;
+  --color-destructive-foreground: #F6F7F9;
+  --color-border: #383E47;
+  --color-input: #383E47;
+  --color-ring: #4C90F0;
+
+  /* ─── Radius ─── */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* ─── Typography ─── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+/* Scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #383E47 #1C2127;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #1C2127;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #383E47;
+  border-radius: 3px;
+}
+
+/* Monospace for financial data */
+.font-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
