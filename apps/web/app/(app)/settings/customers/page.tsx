@@ -4,56 +4,17 @@ import { Topbar } from '@/components/layout/Topbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, Pencil } from 'lucide-react';
-
-const DEMO_CUSTOMERS = [
-  {
-    id: 'cust-1',
-    accountNumber: 'C-0001',
-    name: 'Robert Harrington',
-    email: 'rharrington@example.com',
-    phone: '(555) 210-4482',
-    billingTerms: 'NET30',
-    openInvoices: 1,
-    openWos: 2,
-    isActive: true,
-  },
-  {
-    id: 'cust-2',
-    accountNumber: 'C-0002',
-    name: 'Skyline Charter LLC',
-    email: 'ops@skylinecharter.com',
-    phone: '(555) 881-2234',
-    billingTerms: 'NET15',
-    openInvoices: 3,
-    openWos: 1,
-    isActive: true,
-  },
-  {
-    id: 'cust-3',
-    accountNumber: 'C-0003',
-    name: 'Pacific Aero Club',
-    email: 'manager@pacificaero.org',
-    phone: '(555) 447-7112',
-    billingTerms: 'NET30',
-    openInvoices: 0,
-    openWos: 1,
-    isActive: true,
-  },
-];
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useCustomers } from '@/hooks/useAnalytics';
+import { Plus, Search, Pencil, Loader2 } from 'lucide-react';
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
-  const filtered = DEMO_CUSTOMERS.filter(
-    c =>
-      !search ||
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.accountNumber.toLowerCase().includes(search.toLowerCase())
-  );
+  const { data, isLoading } = useCustomers(search || undefined);
+  const customers = data?.data ?? [];
 
   return (
     <div className="flex flex-col h-full">
@@ -86,36 +47,40 @@ export default function CustomersPage() {
                 <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Name</th>
                 <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Contact</th>
                 <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Terms</th>
-                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Open WOs</th>
-                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Open Invoices</th>
+                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Work Orders</th>
+                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Aircraft</th>
                 <th className="py-2.5 px-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-hover">
-              {filtered.map(customer => (
+              {isLoading && (
+                <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-5 w-5 animate-spin text-content-muted mx-auto" /></td></tr>
+              )}
+              {!isLoading && customers.length === 0 && (
+                <tr><td colSpan={7} className="py-12 text-center text-sm text-content-muted">No customers found.</td></tr>
+              )}
+              {customers.map((customer: any) => (
                 <tr key={customer.id} className="hover:bg-surface-hover/30">
-                  <td className="py-3 px-4 font-mono text-xs text-content-muted">{customer.accountNumber}</td>
+                  <td className="py-3 px-4 font-mono text-xs text-content-muted">{customer.accountNumber ?? '—'}</td>
                   <td className="py-3 px-4 font-medium text-content-primary">{customer.name}</td>
                   <td className="py-3 px-4">
-                    <p className="text-xs text-content-secondary">{customer.email}</p>
-                    <p className="text-xs text-content-muted">{customer.phone}</p>
+                    {customer.email && <p className="text-xs text-content-secondary">{customer.email}</p>}
+                    {customer.phone && <p className="text-xs text-content-muted">{customer.phone}</p>}
                   </td>
                   <td className="py-3 px-4">
-                    <Badge variant="default">{customer.billingTerms}</Badge>
+                    {customer.billingTerms
+                      ? <Badge variant="default">{customer.billingTerms}</Badge>
+                      : <span className="text-xs text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4 text-right font-mono text-xs">
-                    {customer.openWos > 0 ? (
-                      <span className="text-intent-primary">{customer.openWos}</span>
-                    ) : (
-                      <span className="text-content-muted">—</span>
-                    )}
+                    {customer._count?.workOrders > 0
+                      ? <span className="text-intent-primary">{customer._count.workOrders}</span>
+                      : <span className="text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4 text-right font-mono text-xs">
-                    {customer.openInvoices > 0 ? (
-                      <span className="text-intent-warning">{customer.openInvoices}</span>
-                    ) : (
-                      <span className="text-content-muted">—</span>
-                    )}
+                    {customer._count?.aircraft > 0
+                      ? <span className="text-content-secondary">{customer._count.aircraft}</span>
+                      : <span className="text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4">
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
@@ -131,9 +96,7 @@ export default function CustomersPage() {
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Customer</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Add Customer</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-4">
             <div>
               <Label className="text-xs">Company / Individual Name</Label>
@@ -150,9 +113,7 @@ export default function CustomersPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowAdd(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowAdd(false)}>Cancel</Button>
               <Button size="sm" className="h-8 text-xs">Add Customer</Button>
             </div>
           </div>

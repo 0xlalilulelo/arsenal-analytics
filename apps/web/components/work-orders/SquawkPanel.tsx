@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
+import { useSquawkApproval } from '@/hooks/useWorkOrders';
 import { CheckCircle2, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 
 export interface Squawk {
@@ -23,6 +24,7 @@ interface SquawkPanelProps {
   onClose: () => void;
   squawks: Squawk[];
   workOrderNumber: string;
+  workOrderId: string;
 }
 
 function SquawkCard({ squawk, onApprove, onDecline }: {
@@ -139,22 +141,35 @@ function SquawkCard({ squawk, onApprove, onDecline }: {
   );
 }
 
-export function SquawkPanel({ open, onClose, squawks, workOrderNumber }: SquawkPanelProps) {
+export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrderId }: SquawkPanelProps) {
   const [localSquawks, setLocalSquawks] = useState(squawks);
+  const { mutateAsync: updateSquawk } = useSquawkApproval(workOrderId);
+
+  useEffect(() => { setLocalSquawks(squawks); }, [squawks]);
 
   const pendingCount = localSquawks.filter(s => s.status === 'PENDING_APPROVAL').length;
   const airworthinessCount = localSquawks.filter(s => s.isAirworthiness && s.status === 'PENDING_APPROVAL').length;
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     setLocalSquawks(prev => prev.map(s =>
       s.id === id ? { ...s, status: 'APPROVED' as const, approvedBy: 'Customer (verbal)', approvedAt: new Date().toISOString() } : s,
     ));
+    try {
+      await updateSquawk({ squawkId: id, status: 'APPROVED', approvedBy: 'Customer (verbal)' });
+    } catch {
+      setLocalSquawks(squawks);
+    }
   };
 
-  const handleDecline = (id: string) => {
+  const handleDecline = async (id: string) => {
     setLocalSquawks(prev => prev.map(s =>
       s.id === id ? { ...s, status: 'DECLINED' as const } : s,
     ));
+    try {
+      await updateSquawk({ squawkId: id, status: 'DECLINED' });
+    } catch {
+      setLocalSquawks(squawks);
+    }
   };
 
   return (

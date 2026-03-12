@@ -10,90 +10,80 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { SquawkPanel, type Squawk } from '@/components/work-orders/SquawkPanel';
+import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
+import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
-  ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle
+  ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
 } from 'lucide-react';
 
-// ─── Demo data ────────────────────────────────────────────────────────────────
-const DEMO_WO = {
-  id: 'wo-1',
-  number: 'WO-2025-0041',
-  type: 'INSPECTION',
-  status: 'IN_PROGRESS',
-  customer: 'Robert Harrington',
-  customerEmail: 'rharrington@example.com',
-  nNumber: 'N5572K',
-  make: 'Cessna',
-  model: '172S Skyhawk',
-  serial: '172S12345',
-  ttsn: 3142.5,
-  engineTtsn: 847.2,
-  dateOpened: '2025-01-13',
-  estimatedClose: '2025-01-20',
-  billingModel: 'HYBRID',
-  laborRate: 115.00,
-  estimatedTotal: 2850.00,
-  shopSuppliesPct: 0.035,
-  notes: 'Annual inspection + 100hr. Customer requested avionics check.',
-};
+const SHOP_SUPPLIES_PCT = 0.035;
 
-const DEMO_LINE_ITEMS = [
-  { id: 'li-1', taskNumber: 'TASK-001', description: 'Annual Inspection — Airframe per FAR 43 Appendix D', referenceDoc: null, estHours: 12.0, actualHours: 9.5, laborRate: 115.00, status: 'COMPLETE', technician: 'Marcus Williams', sortOrder: 1 },
-  { id: 'li-2', taskNumber: 'TASK-002', description: 'Engine Inspection — Continental IO-360', referenceDoc: null, estHours: 3.0, actualHours: 3.5, laborRate: 115.00, status: 'COMPLETE', technician: 'Marcus Williams', sortOrder: 2 },
-  { id: 'li-3', taskNumber: 'TASK-003', description: 'Avionics Inspection — Garmin G1000 suite functional check', referenceDoc: null, estHours: 2.0, actualHours: 0, laborRate: 130.00, status: 'PENDING', technician: null, sortOrder: 3 },
-];
-
-const DEMO_LABOR_ENTRIES = [
-  { id: 'le-1', date: '2025-01-13', technician: 'Marcus Williams', description: 'Airframe inspection — exterior and control surface checks', hours: 4.5, rate: 115.00, billable: true },
-  { id: 'le-2', date: '2025-01-14', technician: 'Marcus Williams', description: 'Airframe inspection continued — interior, electrical', hours: 5.0, rate: 115.00, billable: true },
-  { id: 'le-3', date: '2025-01-14', technician: 'Marcus Williams', description: 'Engine inspection — compression, mag check', hours: 3.5, rate: 115.00, billable: true },
-];
-
-const DEMO_SQUAWKS: Squawk[] = [
-  { id: 'sq-1', description: 'Left brake assembly shows 40% wear — pads worn near minimum thickness. Recommend replacement before next flight.', estLaborHours: 1.5, estPartsTotal: 285.00, estTotal: 457.50, status: 'APPROVED', isAirworthiness: false, approvedBy: 'Robert Harrington', approvedAt: '2025-01-14' },
-  { id: 'sq-2', description: 'Nose gear shimmy dampener worn — excessive play observed during taxi inspection. Replacement required for airworthiness.', estLaborHours: 2.0, estPartsTotal: 445.00, estTotal: 675.00, status: 'PENDING_APPROVAL', isAirworthiness: true, approvedBy: null },
-];
-
-const DEMO_COMPLIANCE = [
-  { id: 'c-1', type: 'AD', referenceId: 'AD 2023-09-11', description: 'Cessna: Inspect and replace elevator trim tab actuator — recurring 100hr', completedAt: '2025-01-13', form337Required: false },
-  { id: 'c-2', type: 'SB', referenceId: 'Cessna SEB95-4', description: 'Cessna Skyhawk: Fuel injection system cleaning service bulletin', completedAt: null, form337Required: false },
-];
-
-const DEMO_AUDIT = [
-  { at: '2025-01-14 14:32', user: 'Marcus W.', action: 'Squawk #2 created — Nose gear shimmy dampener' },
-  { at: '2025-01-14 11:15', user: 'Marcus W.', action: 'Squawk #1 approved by customer (Robert Harrington)' },
-  { at: '2025-01-14 09:00', user: 'Marcus W.', action: 'TASK-002 marked Complete' },
-  { at: '2025-01-13 17:30', user: 'Marcus W.', action: 'TASK-001 marked Complete' },
-  { at: '2025-01-13 08:00', user: 'Admin', action: 'Work order opened' },
-];
-
-// ─── Calculations ─────────────────────────────────────────────────────────────
-const totalActualHours = DEMO_LABOR_ENTRIES.reduce((s, e) => s + e.hours, 0);
-const totalLaborBilled = DEMO_LABOR_ENTRIES.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rate, 0);
-const shopSupplies = totalLaborBilled * DEMO_WO.shopSuppliesPct;
-const estimatedTotalLaborBilled = DEMO_LINE_ITEMS.reduce((s, li) => s + li.estHours * li.laborRate, 0);
-const completionPct = Math.round((totalActualHours / (DEMO_WO.estimatedTotal / DEMO_WO.laborRate)) * 100);
+function statusBadgeVariant(status: string) {
+  const map: Record<string, 'open' | 'in-progress' | 'awaiting-parts' | 'awaiting-approval' | 'complete' | 'invoiced' | 'closed'> = {
+    OPEN: 'open', IN_PROGRESS: 'in-progress', AWAITING_PARTS: 'awaiting-parts',
+    AWAITING_APPROVAL: 'awaiting-approval', COMPLETE: 'complete', INVOICED: 'invoiced', CLOSED: 'closed',
+  };
+  return map[status] ?? 'open';
+}
 
 export default function WorkOrderDetailPage() {
   const [squawkPanelOpen, setSquawkPanelOpen] = useState(false);
   const [logTimeOpen, setLogTimeOpen] = useState(false);
   const { id: workOrderId } = useParams<{ id: string }>();
-  const pendingSquawks = DEMO_SQUAWKS.filter(s => s.status === 'PENDING_APPROVAL');
+
+  const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
+  const wo = data?.data;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <Topbar title="Work Order" subtitle="Loading…" />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-content-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !wo) {
+    return (
+      <div className="flex flex-col h-full">
+        <Topbar title="Work Order" subtitle="Not found" />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-content-muted">Work order not found.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const totalActualHours = wo.laborEntries.reduce((s, e) => s + e.hours, 0);
+  const totalLaborBilled = wo.laborEntries.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rateUsed, 0);
+  const shopSupplies = totalLaborBilled * SHOP_SUPPLIES_PCT;
+  const estimatedTotalLaborBilled = wo.lineItems.reduce((s, li) => s + li.estHours * li.laborRate, 0);
+  const completedItems = wo.lineItems.filter(li => li.status === 'COMPLETE').length;
+  const completionPct = wo.lineItems.length > 0 ? Math.round((completedItems / wo.lineItems.length) * 100) : 0;
+
+  // Actual hours logged per task card
+  const hoursPerTask: Record<string, number> = {};
+  for (const le of wo.laborEntries) {
+    const key = (le as any).lineItemId ?? '__unassigned__';
+    hoursPerTask[key] = (hoursPerTask[key] ?? 0) + le.hours;
+  }
+
+  const pendingSquawks = wo.squawks.filter(s => s.status === 'PENDING_APPROVAL');
 
   return (
     <div className="flex flex-col h-full">
       <Topbar
-        title={DEMO_WO.number}
-        subtitle={`${DEMO_WO.customer} · ${DEMO_WO.nNumber} ${DEMO_WO.model}`}
+        title={wo.number}
+        subtitle={`${wo.customer.name} · ${wo.aircraft.nNumber} ${wo.aircraft.make} ${wo.aircraft.model}`}
         actions={
           <div className="flex items-center gap-2">
             <Link href="/work-orders">
               <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs">
-                <ChevronLeft className="h-3.5 w-3.5" />
-                All Work Orders
+                <ChevronLeft className="h-3.5 w-3.5" />All Work Orders
               </Button>
             </Link>
             <Button
@@ -103,7 +93,7 @@ export default function WorkOrderDetailPage() {
               onClick={() => setSquawkPanelOpen(true)}
             >
               <AlertCircle className="h-3.5 w-3.5" />
-              Squawks ({DEMO_SQUAWKS.length})
+              Squawks ({wo.squawks.length})
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs">Generate Invoice</Button>
           </div>
@@ -111,33 +101,26 @@ export default function WorkOrderDetailPage() {
       />
 
       <div className="flex-1 overflow-y-auto">
-        {/* Header card */}
+        {/* Summary bar */}
         <div className="border-b border-surface-hover bg-surface-primary px-6 py-4">
           <div className="flex flex-wrap items-start gap-4">
-            {/* Status + type */}
             <div className="flex items-center gap-2">
-              <Badge variant={DEMO_WO.type === 'AOG' ? 'aog' : DEMO_WO.type === 'INSPECTION' ? 'inspection' : 'scheduled'}>
-                {DEMO_WO.type}
-              </Badge>
-              <Badge variant="in-progress">IN PROGRESS</Badge>
-              <Badge variant="default" className="font-mono">{DEMO_WO.billingModel.replace('_', ' ')}</Badge>
+              <Badge variant={wo.type === 'AOG' ? 'aog' : wo.type === 'INSPECTION' ? 'inspection' : 'scheduled'}>{wo.type}</Badge>
+              <Badge variant={statusBadgeVariant(wo.status)}>{wo.status.replace(/_/g, ' ')}</Badge>
+              <Badge variant="default" className="font-mono">{wo.billingModel.replace(/_/g, ' ')}</Badge>
             </div>
-
-            {/* Progress */}
             <div className="flex-1 min-w-48 max-w-xs">
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-content-muted">Completion</span>
+                <span className="text-content-muted">Task Completion</span>
                 <span className="font-mono text-content-primary">{completionPct}%</span>
               </div>
               <Progress value={completionPct} />
             </div>
-
-            {/* Financial summary */}
             <div className="flex gap-6 ml-auto">
               {[
-                { label: 'Est. Total', value: formatCurrency(DEMO_WO.estimatedTotal), color: 'text-content-secondary' },
+                { label: 'Est. Total', value: formatCurrency(wo.estimatedTotal ?? 0), color: 'text-content-secondary' },
                 { label: 'Labor Billed', value: formatCurrency(totalLaborBilled), color: 'text-intent-primary' },
-                { label: 'Shop Supplies', value: formatCurrency(shopSupplies), color: 'text-content-muted' },
+                { label: `Shop Supplies (${formatPct(SHOP_SUPPLIES_PCT)})`, value: formatCurrency(shopSupplies), color: 'text-content-muted' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="text-right">
                   <p className="text-xs text-content-muted">{label}</p>
@@ -148,7 +131,6 @@ export default function WorkOrderDetailPage() {
           </div>
         </div>
 
-        {/* Airworthiness alert */}
         {pendingSquawks.some(s => s.isAirworthiness) && (
           <div className="px-6 pt-4">
             <Alert variant="destructive">
@@ -162,124 +144,113 @@ export default function WorkOrderDetailPage() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="px-6 pt-4">
           <Tabs defaultValue="overview">
             <TabsList className="w-full justify-start">
-              <TabsTrigger value="overview" className="gap-1.5">
-                <ClipboardList className="h-3.5 w-3.5" />Overview
-              </TabsTrigger>
-              <TabsTrigger value="labor" className="gap-1.5">
-                <Wrench className="h-3.5 w-3.5" />Labor
-              </TabsTrigger>
-              <TabsTrigger value="parts" className="gap-1.5">
-                <Package className="h-3.5 w-3.5" />Parts
-              </TabsTrigger>
-              <TabsTrigger value="billing" className="gap-1.5">
-                <FileText className="h-3.5 w-3.5" />Billing
-              </TabsTrigger>
-              <TabsTrigger value="compliance" className="gap-1.5">
-                <Shield className="h-3.5 w-3.5" />Compliance
-              </TabsTrigger>
-              <TabsTrigger value="history" className="gap-1.5">
-                <History className="h-3.5 w-3.5" />History
-              </TabsTrigger>
+              <TabsTrigger value="overview" className="gap-1.5"><ClipboardList className="h-3.5 w-3.5" />Overview</TabsTrigger>
+              <TabsTrigger value="labor" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Labor</TabsTrigger>
+              <TabsTrigger value="parts" className="gap-1.5"><Package className="h-3.5 w-3.5" />Parts</TabsTrigger>
+              <TabsTrigger value="billing" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Billing</TabsTrigger>
+              <TabsTrigger value="compliance" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Compliance</TabsTrigger>
+              <TabsTrigger value="history" className="gap-1.5"><History className="h-3.5 w-3.5" />History</TabsTrigger>
             </TabsList>
 
-            {/* ── Overview ─────────────────────────────────────────────── */}
+            {/* ── Overview ─────────────────────────────────────────────────── */}
             <TabsContent value="overview">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                {/* Customer + Aircraft */}
                 <Card>
                   <CardHeader><CardTitle className="text-sm">Customer & Aircraft</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     <div>
                       <p className="text-xs text-content-muted mb-0.5">Customer</p>
-                      <p className="font-medium text-content-primary">{DEMO_WO.customer}</p>
-                      <p className="text-xs text-content-muted">{DEMO_WO.customerEmail}</p>
+                      <p className="font-medium text-content-primary">{wo.customer.name}</p>
+                      {wo.customer.email && <p className="text-xs text-content-muted">{wo.customer.email}</p>}
+                      {wo.customer.phone && <p className="text-xs text-content-muted">{wo.customer.phone}</p>}
                     </div>
                     <div>
                       <p className="text-xs text-content-muted mb-0.5">Aircraft</p>
-                      <p className="font-mono text-sm font-semibold text-content-primary">{DEMO_WO.nNumber}</p>
-                      <p className="text-xs text-content-secondary">{DEMO_WO.make} {DEMO_WO.model} · S/N {DEMO_WO.serial}</p>
-                      <div className="mt-1 flex gap-3 text-xs text-content-muted">
-                        <span>TTSN: <span className="font-mono text-content-secondary">{DEMO_WO.ttsn.toLocaleString()}h</span></span>
-                        <span>Eng: <span className="font-mono text-content-secondary">{DEMO_WO.engineTtsn}h</span></span>
-                      </div>
+                      <p className="font-mono text-sm font-semibold text-content-primary">{wo.aircraft.nNumber}</p>
+                      <p className="text-xs text-content-secondary">{wo.aircraft.make} {wo.aircraft.model} · S/N {wo.aircraft.serial}</p>
+                      {(wo.aircraft.ttsn || wo.aircraft.engineHours) && (
+                        <div className="mt-1 flex gap-3 text-xs text-content-muted">
+                          {wo.aircraft.ttsn != null && <span>TTSN: <span className="font-mono text-content-secondary">{wo.aircraft.ttsn.toLocaleString()}h</span></span>}
+                          {wo.aircraft.engineHours != null && <span>Eng: <span className="font-mono text-content-secondary">{wo.aircraft.engineHours}h</span></span>}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-content-muted mb-0.5">Dates</p>
-                      <p className="text-xs">Opened: <span className="text-content-secondary">{formatDate(DEMO_WO.dateOpened)}</span></p>
-                      <p className="text-xs">Est. Close: <span className="text-content-secondary">{DEMO_WO.estimatedClose ? formatDate(DEMO_WO.estimatedClose) : '—'}</span></p>
+                      <p className="text-xs">Opened: <span className="text-content-secondary">{formatDate(wo.dateOpened)}</span></p>
+                      <p className="text-xs">Est. Close: <span className="text-content-secondary">{wo.estimatedClose ? formatDate(wo.estimatedClose) : '—'}</span></p>
                     </div>
+                    {wo.notes && (
+                      <div>
+                        <p className="text-xs text-content-muted mb-0.5">Notes</p>
+                        <p className="text-xs text-content-secondary">{wo.notes}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Task cards */}
                 <Card className="lg:col-span-2">
                   <CardHeader><CardTitle className="text-sm">Task Cards</CardTitle></CardHeader>
                   <CardContent className="p-0">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-surface-hover">
-                          <th className="text-left py-2 px-4 text-content-muted font-semibold">Task</th>
-                          <th className="text-left py-2 px-4 text-content-muted font-semibold">Description</th>
-                          <th className="text-right py-2 px-4 text-content-muted font-semibold">Est h</th>
-                          <th className="text-right py-2 px-4 text-content-muted font-semibold">Act h</th>
-                          <th className="text-right py-2 px-4 text-content-muted font-semibold">Billed</th>
-                          <th className="text-left py-2 px-4 text-content-muted font-semibold">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-surface-hover">
-                        {DEMO_LINE_ITEMS.map(li => {
-                          const variance = li.actualHours > 0 ? ((li.actualHours - li.estHours) / li.estHours) : 0;
-                          return (
-                            <tr key={li.id} className="hover:bg-surface-hover/30">
-                              <td className="py-2.5 px-4 font-mono text-content-muted">{li.taskNumber}</td>
-                              <td className="py-2.5 px-4 text-content-primary max-w-xs">{li.description}</td>
-                              <td className="py-2.5 px-4 text-right font-mono text-content-muted">{li.estHours.toFixed(1)}</td>
-                              <td className={`py-2.5 px-4 text-right font-mono ${variance > 0.1 ? 'text-intent-warning' : variance > 0.3 ? 'text-intent-danger' : 'text-intent-success'}`}>
-                                {li.actualHours > 0 ? li.actualHours.toFixed(1) : '—'}
-                              </td>
-                              <td className="py-2.5 px-4 text-right font-mono text-content-primary">
-                                {formatCurrency(li.actualHours * li.laborRate)}
-                              </td>
-                              <td className="py-2.5 px-4">
-                                <Badge variant={li.status === 'COMPLETE' ? 'complete' : li.status === 'IN_PROGRESS' ? 'in-progress' : 'open'}>
-                                  {li.status}
-                                </Badge>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    {wo.lineItems.length === 0 ? (
+                      <p className="text-sm text-content-muted p-4">No task cards added yet.</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-surface-hover">
+                            <th className="text-left py-2 px-4 text-content-muted font-semibold">Task</th>
+                            <th className="text-left py-2 px-4 text-content-muted font-semibold">Description</th>
+                            <th className="text-right py-2 px-4 text-content-muted font-semibold">Est h</th>
+                            <th className="text-right py-2 px-4 text-content-muted font-semibold">Act h</th>
+                            <th className="text-right py-2 px-4 text-content-muted font-semibold">Billed</th>
+                            <th className="text-left py-2 px-4 text-content-muted font-semibold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-hover">
+                          {wo.lineItems.map(li => {
+                            const actualH = hoursPerTask[li.id] ?? 0;
+                            const variance = actualH > 0 && li.estHours > 0 ? (actualH - li.estHours) / li.estHours : 0;
+                            return (
+                              <tr key={li.id} className="hover:bg-surface-hover/30">
+                                <td className="py-2.5 px-4 font-mono text-content-muted">{li.taskNumber}</td>
+                                <td className="py-2.5 px-4 text-content-primary max-w-xs">{li.description}</td>
+                                <td className="py-2.5 px-4 text-right font-mono text-content-muted">{li.estHours.toFixed(1)}</td>
+                                <td className={`py-2.5 px-4 text-right font-mono ${variance > 0.3 ? 'text-intent-danger' : variance > 0.1 ? 'text-intent-warning' : actualH > 0 ? 'text-intent-success' : 'text-content-muted'}`}>
+                                  {actualH > 0 ? actualH.toFixed(1) : '—'}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-mono text-content-primary">
+                                  {actualH > 0 ? formatCurrency(actualH * li.laborRate) : '—'}
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <Badge variant={li.status === 'COMPLETE' ? 'complete' : li.status === 'IN_PROGRESS' ? 'in-progress' : 'open'}>
+                                    {li.status}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
 
-            {/* ── Labor ─────────────────────────────────────────────────── */}
+            {/* ── Labor ─────────────────────────────────────────────────────── */}
             <TabsContent value="labor">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex gap-6 text-sm">
-                    <div>
-                      <p className="text-xs text-content-muted">Total Hours</p>
-                      <p className="font-mono text-lg font-bold text-content-primary">{totalActualHours.toFixed(1)}h</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-content-muted">Labor Billed</p>
-                      <p className="font-mono text-lg font-bold text-intent-gold">{formatCurrency(totalLaborBilled)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-content-muted">Est. Labor</p>
-                      <p className="font-mono text-lg font-bold text-content-secondary">{formatCurrency(estimatedTotalLaborBilled)}</p>
-                    </div>
+                    <div><p className="text-xs text-content-muted">Total Hours</p><p className="font-mono text-lg font-bold text-content-primary">{totalActualHours.toFixed(1)}h</p></div>
+                    <div><p className="text-xs text-content-muted">Labor Billed</p><p className="font-mono text-lg font-bold text-intent-gold">{formatCurrency(totalLaborBilled)}</p></div>
+                    <div><p className="text-xs text-content-muted">Est. Labor</p><p className="font-mono text-lg font-bold text-content-secondary">{formatCurrency(estimatedTotalLaborBilled)}</p></div>
                   </div>
                   <Button size="sm" className="h-8 text-xs" onClick={() => setLogTimeOpen(true)}>Log Time</Button>
                 </div>
-
                 <div className="rounded-lg border border-surface-hover overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
@@ -294,14 +265,17 @@ export default function WorkOrderDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-hover">
-                      {DEMO_LABOR_ENTRIES.map(entry => (
+                      {wo.laborEntries.length === 0 && (
+                        <tr><td colSpan={7} className="py-8 text-center text-xs text-content-muted">No labor entries yet. Click "Log Time" to add.</td></tr>
+                      )}
+                      {wo.laborEntries.map(entry => (
                         <tr key={entry.id} className="hover:bg-surface-hover/30">
-                          <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{entry.date}</td>
-                          <td className="py-2.5 px-4 text-xs text-content-primary">{entry.technician}</td>
-                          <td className="py-2.5 px-4 text-xs text-content-secondary max-w-xs truncate">{entry.description}</td>
+                          <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{formatDate(entry.date)}</td>
+                          <td className="py-2.5 px-4 text-xs text-content-primary">{entry.technician.name}</td>
+                          <td className="py-2.5 px-4 text-xs text-content-secondary max-w-xs truncate">{entry.description ?? '—'}</td>
                           <td className="py-2.5 px-4 text-right font-mono text-xs text-content-primary">{entry.hours.toFixed(2)}</td>
-                          <td className="py-2.5 px-4 text-right font-mono text-xs text-content-muted">${entry.rate}/h</td>
-                          <td className="py-2.5 px-4 text-right font-mono text-xs text-intent-primary">{formatCurrency(entry.hours * entry.rate)}</td>
+                          <td className="py-2.5 px-4 text-right font-mono text-xs text-content-muted">${entry.rateUsed}/h</td>
+                          <td className="py-2.5 px-4 text-right font-mono text-xs text-intent-primary">{formatCurrency(entry.hours * entry.rateUsed)}</td>
                           <td className="py-2.5 px-4">
                             {entry.billable
                               ? <CheckCircle2 className="h-4 w-4 text-intent-success" />
@@ -315,20 +289,51 @@ export default function WorkOrderDetailPage() {
               </div>
             </TabsContent>
 
-            {/* ── Parts ─────────────────────────────────────────────────── */}
+            {/* ── Parts ─────────────────────────────────────────────────────── */}
             <TabsContent value="parts">
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-content-secondary">Parts requested for this work order</p>
+                  <p className="text-sm text-content-secondary">{wo.partRequests.length} part request{wo.partRequests.length !== 1 ? 's' : ''}</p>
                   <Button size="sm" className="h-8 text-xs">Request Part</Button>
                 </div>
-                <div className="rounded-lg border border-surface-hover p-8 text-center text-sm text-content-muted">
-                  No parts requested yet for this work order.
-                </div>
+                {wo.partRequests.length === 0 ? (
+                  <div className="rounded-lg border border-surface-hover p-8 text-center text-sm text-content-muted">
+                    No parts requested yet for this work order.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-surface-hover overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-surface-hover bg-surface-panel">
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Part Number</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Description</th>
+                          <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Qty</th>
+                          <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Unit Cost</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-surface-hover">
+                        {wo.partRequests.map(pr => (
+                          <tr key={pr.id} className="hover:bg-surface-hover/30">
+                            <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{pr.partNumber}</td>
+                            <td className="py-2.5 px-4 text-xs text-content-primary">{pr.description}</td>
+                            <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.qty}</td>
+                            <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.unitCost ? formatCurrency(pr.unitCost) : '—'}</td>
+                            <td className="py-2.5 px-4">
+                              <Badge variant={pr.status === 'RECEIVED' ? 'complete' : pr.status === 'ORDERED' ? 'awaiting-parts' : 'open'}>
+                                {pr.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
-            {/* ── Billing ───────────────────────────────────────────────── */}
+            {/* ── Billing ───────────────────────────────────────────────────── */}
             <TabsContent value="billing">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <Card>
@@ -336,8 +341,8 @@ export default function WorkOrderDetailPage() {
                   <CardContent className="space-y-2 text-sm">
                     {[
                       { label: 'Labor', value: totalLaborBilled, color: 'text-content-primary' },
-                      { label: 'Parts', value: 0, color: 'text-content-primary' },
-                      { label: `Shop Supplies (${formatPct(DEMO_WO.shopSuppliesPct)})`, value: shopSupplies, color: 'text-content-muted' },
+                      { label: 'Parts', value: wo.partRequests.filter(p => p.status === 'RECEIVED').reduce((s, p) => s + (p.unitCost ?? 0) * p.qty, 0), color: 'text-content-primary' },
+                      { label: `Shop Supplies (${formatPct(SHOP_SUPPLIES_PCT)})`, value: shopSupplies, color: 'text-content-muted' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="flex justify-between">
                         <span className="text-content-muted">{label}</span>
@@ -350,42 +355,64 @@ export default function WorkOrderDetailPage() {
                     </div>
                     <div className="flex justify-between text-xs text-content-muted">
                       <span>Est. Total</span>
-                      <span className="font-mono">{formatCurrency(DEMO_WO.estimatedTotal)}</span>
+                      <span className="font-mono">{formatCurrency(wo.estimatedTotal ?? 0)}</span>
                     </div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader><CardTitle className="text-sm">Progressive Billing Milestones</CardTitle></CardHeader>
                   <CardContent>
-                    <p className="text-sm text-content-muted">No milestones configured. Add milestones to enable progress billing.</p>
-                    <Button variant="outline" size="sm" className="mt-3 h-8 text-xs">Add Milestone</Button>
+                    {wo.milestones.length === 0 ? (
+                      <>
+                        <p className="text-sm text-content-muted">No milestones configured.</p>
+                        <Button variant="outline" size="sm" className="mt-3 h-8 text-xs">Add Milestone</Button>
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        {wo.milestones.map(m => (
+                          <div key={m.id} className="flex items-center justify-between text-sm">
+                            <div>
+                              <p className="text-content-primary">{m.title}</p>
+                              <p className="text-xs text-content-muted">{m.pct}%</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-mono text-content-primary">{m.amount ? formatCurrency(m.amount) : '—'}</p>
+                              {m.invoiced && <Badge variant="invoiced" className="text-xs">Invoiced</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
 
-            {/* ── Compliance ────────────────────────────────────────────── */}
+            {/* ── Compliance ────────────────────────────────────────────────── */}
             <TabsContent value="compliance">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-content-secondary">{DEMO_COMPLIANCE.length} compliance items</p>
+                  <p className="text-sm text-content-secondary">{wo.complianceItems.length} compliance item{wo.complianceItems.length !== 1 ? 's' : ''}</p>
                   <Button size="sm" className="h-8 text-xs">Add Item</Button>
                 </div>
-                {DEMO_COMPLIANCE.map(item => (
+                {wo.complianceItems.length === 0 && (
+                  <div className="rounded-lg border border-surface-hover p-8 text-center text-sm text-content-muted">No compliance items recorded.</div>
+                )}
+                {wo.complianceItems.map(item => (
                   <div key={item.id} className="rounded-lg border border-surface-hover bg-surface-card p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant={item.type === 'AD' ? 'aog' : 'inspection'}>{item.type}</Badge>
                           <span className="font-mono text-xs text-content-secondary">{item.referenceId}</span>
+                          {item.form337Required && <Badge variant="default" className="text-xs">Form 337</Badge>}
                         </div>
                         <p className="text-sm text-content-primary">{item.description}</p>
                       </div>
                       <div className="ml-4 shrink-0">
                         {item.completedAt
-                          ? <span className="flex items-center gap-1 text-xs text-intent-success"><CheckCircle2 className="h-3.5 w-3.5" />Complied</span>
-                          : <span className="flex items-center gap-1 text-xs text-intent-warning"><Clock className="h-3.5 w-3.5" />Pending</span>
-                        }
+                          ? <span className="flex items-center gap-1 text-xs text-intent-success"><CheckCircle2 className="h-3.5 w-3.5" />Complied {formatDate(item.completedAt)}</span>
+                          : <span className="flex items-center gap-1 text-xs text-intent-warning"><Clock className="h-3.5 w-3.5" />Pending</span>}
                       </div>
                     </div>
                   </div>
@@ -393,31 +420,38 @@ export default function WorkOrderDetailPage() {
               </div>
             </TabsContent>
 
-            {/* ── History ───────────────────────────────────────────────── */}
+            {/* ── History ───────────────────────────────────────────────────── */}
             <TabsContent value="history">
               <div className="space-y-2">
-                {DEMO_AUDIT.map((entry, i) => (
-                  <div key={i} className="flex gap-3 text-sm">
-                    <span className="font-mono text-xs text-content-muted w-32 shrink-0">{entry.at}</span>
-                    <span className="text-content-muted shrink-0">{entry.user}</span>
-                    <span className="text-content-secondary">{entry.action}</span>
+                {wo.invoices.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-content-muted mb-2 font-semibold uppercase tracking-wider">Invoices</p>
+                    {wo.invoices.map(inv => (
+                      <div key={inv.id} className="flex items-center justify-between text-xs p-2 rounded border border-surface-hover mb-1">
+                        <Link href={`/invoices/${inv.id}`} className="font-mono text-intent-primary hover:underline">{inv.invoiceNumber}</Link>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-content-primary">{formatCurrency(inv.total)}</span>
+                          <Badge variant={inv.status === 'PAID' ? 'complete' : 'default'}>{inv.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <p className="text-xs text-content-muted py-4 text-center">Full audit history coming soon.</p>
               </div>
             </TabsContent>
           </Tabs>
         </div>
       </div>
 
-      {/* Squawk side panel */}
       <SquawkPanel
         open={squawkPanelOpen}
         onClose={() => setSquawkPanelOpen(false)}
-        squawks={DEMO_SQUAWKS}
-        workOrderNumber={DEMO_WO.number}
+        squawks={wo.squawks}
+        workOrderNumber={wo.number}
+        workOrderId={wo.id}
       />
 
-      {/* Log Time dialog */}
       <LogTimeDialog
         open={logTimeOpen}
         onClose={() => setLogTimeOpen(false)}

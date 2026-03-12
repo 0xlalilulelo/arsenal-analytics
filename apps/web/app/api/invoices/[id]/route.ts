@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: { id: params.id },
     include: {
       customer: true,
-      workOrder: { select: { number: true, aircraft: { select: { nNumber: true, make: true, model: true } } } },
+      workOrder: { select: { id: true, number: true, aircraft: { select: { nNumber: true, make: true, model: true } } } },
       lineItems: { orderBy: { sortOrder: 'asc' } },
       payments: { orderBy: { paidAt: 'desc' } },
     },

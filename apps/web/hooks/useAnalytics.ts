@@ -43,6 +43,18 @@ export function useTechnicians() {
       if (!res.ok) throw new Error('Failed to fetch technicians');
       return res.json();
     },
-    staleTime: 10 * 60 * 1000,  // technician list rarely changes
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useParts(search?: string) {
+  return useQuery({
+    queryKey: ['parts', search],
+    queryFn: async () => {
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const res = await fetch(`/api/parts${params}`);
+      if (!res.ok) throw new Error('Failed to fetch parts');
+      return res.json();
+    },
   });
 }
