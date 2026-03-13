@@ -6,7 +6,7 @@ import { addDays } from 'date-fns';
 const TERMS_DAYS: Record<string, number> = { NET_15: 15, NET_30: 30, NET_45: 45, COD: 0, PREPAY: 0 };
 
 async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  const org = await prisma.organization.findFirst({ select: { id: true } });
   return org?.id ?? null;
 }
 

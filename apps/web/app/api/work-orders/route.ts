@@ -3,7 +3,7 @@ import { prisma } from '@mro/db';
 import type { WorkOrderStatus, WorkOrderType } from '@prisma/client';
 
 async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  const org = await prisma.organization.findFirst({ select: { id: true } });
   return org?.id ?? null;
 }
 

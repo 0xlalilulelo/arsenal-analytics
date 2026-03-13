@@ -3,7 +3,7 @@ import { prisma } from '@mro/db';
 import { classifyAgingBucket } from '@mro/core';
 
 export async function GET(_req: NextRequest) {
-  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  const org = await prisma.organization.findFirst({ select: { id: true } });
   if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
   const orgId = org.id;
   const now = new Date();

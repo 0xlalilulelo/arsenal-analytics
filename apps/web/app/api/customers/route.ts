@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search');
 
-  const org = await prisma.organization.findFirst({ where: { slug: 'arsenal-aviation' }, select: { id: true } });
+  const org = await prisma.organization.findFirst({ select: { id: true } });
   if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
   const customers = await prisma.customer.findMany({

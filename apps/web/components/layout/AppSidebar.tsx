@@ -12,11 +12,13 @@ import {
   Settings,
   Plane,
   Wrench,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard',  label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/quotes',     label: 'Quotes',        icon: Calculator },
   { href: '/work-orders', label: 'Work Orders',  icon: ClipboardList },
   { href: '/aog',        label: 'AOG',           icon: AlertTriangle,  highlight: true },
   { href: '/parts',      label: 'Parts & POs',   icon: Package },
