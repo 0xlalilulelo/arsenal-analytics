@@ -36,3 +36,36 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ data: items });
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const org = await prisma.organization.findFirst({ select: { id: true } });
+    if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+
+    const body = await request.json();
+    const { workOrderId, type, referenceId, description, form337Required } = body;
+
+    if (!workOrderId) return NextResponse.json({ error: 'workOrderId required' }, { status: 422 });
+    if (!type) return NextResponse.json({ error: 'type required' }, { status: 422 });
+    if (!referenceId?.trim()) return NextResponse.json({ error: 'referenceId required' }, { status: 422 });
+    if (!description?.trim()) return NextResponse.json({ error: 'description required' }, { status: 422 });
+
+    const item = await prisma.complianceItem.create({
+      data: {
+        workOrderId,
+        type,
+        referenceId: referenceId.trim(),
+        description: description.trim(),
+        form337Required: form337Required ?? false,
+      },
+      include: {
+        workOrder: { select: { id: true, number: true, aircraft: { select: { nNumber: true } } } },
+      },
+    });
+
+    return NextResponse.json({ data: item }, { status: 201 });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

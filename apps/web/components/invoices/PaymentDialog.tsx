@@ -24,21 +24,37 @@ type Props = {
   onSuccess?: () => void;
 };
 
-export function PaymentDialog({ open, onClose, invoiceNumber, balanceDue, onSuccess }: Props) {
+export function PaymentDialog({ open, onClose, invoiceId, invoiceNumber, balanceDue, onSuccess }: Props) {
   const [amount, setAmount] = useState(balanceDue.toFixed(2));
   const [method, setMethod] = useState('CHECK');
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsSubmitting(true);
-    // In production: POST /api/invoices/[id]/payments
-    await new Promise(r => setTimeout(r, 500));
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          method,
+          reference: reference || undefined,
+          memo: note || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to record payment');
+      onSuccess?.();
+      onClose();
+    } catch {
+      setError('Failed to record payment. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -104,6 +120,7 @@ export function PaymentDialog({ open, onClose, invoiceNumber, balanceDue, onSucc
             />
           </div>
 
+          {error && <p className="text-xs text-intent-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={onClose}>
               Cancel

@@ -29,21 +29,53 @@ function useCreateTechnician() {
   });
 }
 
+function useUpdateTechnician() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; name: string; certifications: string[]; billRate: number; costRate: number }) => {
+      const res = await fetch(`/api/technicians/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update technician');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['technicians'] }),
+  });
+}
+
+type TechRow = {
+  id: string;
+  name: string;
+  certifications: string[];
+  billRate: number | null;
+  costRate: number | null;
+};
+
 export default function TechniciansPage() {
   const [showAdd, setShowAdd] = useState(false);
+  const [editTech, setEditTech] = useState<TechRow | null>(null);
+
+  // Add form state
   const [name, setName] = useState('');
   const [billRate, setBillRate] = useState('115');
   const [costRate, setCostRate] = useState('48');
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
 
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editBillRate, setEditBillRate] = useState('');
+  const [editCostRate, setEditCostRate] = useState('');
+  const [editCerts, setEditCerts] = useState<string[]>([]);
+
   const { data, isLoading } = useTechnicians();
   const technicians = data?.data ?? [];
   const { mutateAsync: createTechnician, isPending: creating } = useCreateTechnician();
+  const { mutateAsync: updateTechnician, isPending: updating } = useUpdateTechnician();
 
-  function toggleCert(cert: string) {
-    setSelectedCerts(prev =>
-      prev.includes(cert) ? prev.filter(c => c !== cert) : [...prev, cert]
-    );
+  function toggleCert(cert: string, certs: string[], setCerts: (c: string[]) => void) {
+    setCerts(certs.includes(cert) ? certs.filter(c => c !== cert) : [...certs, cert]);
   }
 
   async function handleAdd() {
@@ -56,6 +88,26 @@ export default function TechniciansPage() {
     });
     setName(''); setBillRate('115'); setCostRate('48'); setSelectedCerts([]);
     setShowAdd(false);
+  }
+
+  function openEdit(tech: TechRow) {
+    setEditTech(tech);
+    setEditName(tech.name);
+    setEditBillRate(String(tech.billRate ?? 115));
+    setEditCostRate(String(tech.costRate ?? 0));
+    setEditCerts(tech.certifications ?? []);
+  }
+
+  async function handleEdit() {
+    if (!editTech || !editName.trim()) return;
+    await updateTechnician({
+      id: editTech.id,
+      name: editName.trim(),
+      certifications: editCerts,
+      billRate: parseFloat(editBillRate) || 115,
+      costRate: parseFloat(editCostRate) || 0,
+    });
+    setEditTech(null);
   }
 
   return (
@@ -91,7 +143,7 @@ export default function TechniciansPage() {
               {!isLoading && technicians.length === 0 && (
                 <tr><td colSpan={7} className="py-12 text-center text-sm text-content-muted">No technicians found.</td></tr>
               )}
-              {technicians.map((tech: any) => {
+              {technicians.map((tech: TechRow) => {
                 const billRateVal = tech.billRate ?? 0;
                 const costRateVal = tech.costRate ?? 0;
                 const margin = billRateVal > 0 ? (billRateVal - costRateVal) / billRateVal : 0;
@@ -122,7 +174,7 @@ export default function TechniciansPage() {
                       {costRateVal > 0 ? `${(margin * 100).toFixed(0)}%` : '—'}
                     </td>
                     <td className="py-3 px-4">
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tech)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                     </td>
@@ -134,6 +186,7 @@ export default function TechniciansPage() {
         </div>
       </div>
 
+      {/* Add Technician Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Add Technician</DialogTitle></DialogHeader>
@@ -154,7 +207,7 @@ export default function TechniciansPage() {
                 {COMMON_CERTS.map(cert => (
                   <button
                     key={cert}
-                    onClick={() => toggleCert(cert)}
+                    onClick={() => toggleCert(cert, selectedCerts, setSelectedCerts)}
                     className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
                       selectedCerts.includes(cert)
                         ? 'bg-intent-primary text-white border-intent-primary'
@@ -170,21 +223,11 @@ export default function TechniciansPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Billing Rate ($/hr)</Label>
-                <Input
-                  type="number"
-                  className="mt-1.5 h-8 text-sm font-mono"
-                  value={billRate}
-                  onChange={e => setBillRate(e.target.value)}
-                />
+                <Input type="number" className="mt-1.5 h-8 text-sm font-mono" value={billRate} onChange={e => setBillRate(e.target.value)} />
               </div>
               <div>
                 <Label className="text-xs">Cost Rate ($/hr)</Label>
-                <Input
-                  type="number"
-                  className="mt-1.5 h-8 text-sm font-mono"
-                  value={costRate}
-                  onChange={e => setCostRate(e.target.value)}
-                />
+                <Input type="number" className="mt-1.5 h-8 text-sm font-mono" value={costRate} onChange={e => setCostRate(e.target.value)} />
               </div>
             </div>
             {billRate && costRate && parseFloat(billRate) > 0 && (
@@ -203,6 +246,70 @@ export default function TechniciansPage() {
             <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleAdd} disabled={!name.trim() || creating}>
               {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Add Technician
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Technician Dialog */}
+      <Dialog open={!!editTech} onOpenChange={(v) => !v && setEditTech(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Edit Technician</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label className="text-xs">Full Name *</Label>
+              <Input
+                className="mt-1.5 h-8 text-sm"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Certifications</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {COMMON_CERTS.map(cert => (
+                  <button
+                    key={cert}
+                    onClick={() => toggleCert(cert, editCerts, setEditCerts)}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
+                      editCerts.includes(cert)
+                        ? 'bg-intent-primary text-white border-intent-primary'
+                        : 'border-surface-hover text-content-muted hover:border-intent-primary hover:text-content-primary'
+                    }`}
+                  >
+                    {cert}
+                    {editCerts.includes(cert) && <X className="h-3 w-3" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Billing Rate ($/hr)</Label>
+                <Input type="number" className="mt-1.5 h-8 text-sm font-mono" value={editBillRate} onChange={e => setEditBillRate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Cost Rate ($/hr)</Label>
+                <Input type="number" className="mt-1.5 h-8 text-sm font-mono" value={editCostRate} onChange={e => setEditCostRate(e.target.value)} />
+              </div>
+            </div>
+            {editBillRate && editCostRate && parseFloat(editBillRate) > 0 && (
+              <p className="text-xs text-content-muted">
+                Margin: <span className="text-intent-success font-semibold">
+                  {(((parseFloat(editBillRate) - parseFloat(editCostRate)) / parseFloat(editBillRate)) * 100).toFixed(0)}%
+                </span>
+                {' '}· AOG: <span className="text-intent-warning font-semibold font-mono">
+                  ${(parseFloat(editBillRate) * 1.5).toFixed(2)}/hr
+                </span>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setEditTech(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleEdit} disabled={!editName.trim() || updating}>
+              {updating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

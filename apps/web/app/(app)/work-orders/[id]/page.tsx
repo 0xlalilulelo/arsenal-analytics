@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
@@ -36,6 +38,7 @@ export default function WorkOrderDetailPage() {
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [requestPartOpen, setRequestPartOpen] = useState(false);
   const [milestoneOpen, setMilestoneOpen] = useState(false);
+  const [complianceOpen, setComplianceOpen] = useState(false);
 
   // Request Part form state
   const [rpPartNumber, setRpPartNumber] = useState('');
@@ -46,6 +49,12 @@ export default function WorkOrderDetailPage() {
   // Add Milestone form state
   const [msName, setMsName] = useState('');
   const [msPct, setMsPct] = useState('');
+
+  // Add Compliance Item form state
+  const [ciType, setCiType] = useState('AD');
+  const [ciRef, setCiRef] = useState('');
+  const [ciDesc, setCiDesc] = useState('');
+  const [ciForm337, setCiForm337] = useState(false);
 
   const { id: workOrderId } = useParams<{ id: string }>();
   const router = useRouter();
@@ -75,6 +84,19 @@ export default function WorkOrderDetailPage() {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to add milestone');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: addComplianceItem, isPending: addingCompliance } = useMutation({
+    mutationFn: async (data: { type: string; referenceId: string; description: string; form337Required: boolean }) => {
+      const res = await fetch('/api/compliance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workOrderId, ...data }),
+      });
+      if (!res.ok) throw new Error('Failed to add compliance item');
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
@@ -471,7 +493,7 @@ export default function WorkOrderDetailPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-content-secondary">{wo.complianceItems.length} compliance item{wo.complianceItems.length !== 1 ? 's' : ''}</p>
-                  <Button size="sm" className="h-8 text-xs">Add Item</Button>
+                  <Button size="sm" className="h-8 text-xs gap-1" onClick={() => setComplianceOpen(true)}>Add Item</Button>
                 </div>
                 {wo.complianceItems.length === 0 && (
                   <div className="rounded-lg border border-surface-hover p-8 text-center text-sm text-content-muted">No compliance items recorded.</div>
@@ -662,6 +684,70 @@ export default function WorkOrderDetailPage() {
             >
               {addingMilestone && <Loader2 className="h-4 w-4 animate-spin" />}
               Add Milestone
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Compliance Item Dialog */}
+      <Dialog open={complianceOpen} onOpenChange={setComplianceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Compliance Item</DialogTitle>
+            <DialogDescription>Link an AD, SB, or inspection to {wo?.number}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type *</Label>
+                <select
+                  value={ciType}
+                  onChange={e => setCiType(e.target.value)}
+                  className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {['AD', 'SB', 'STC', 'ANNUAL', 'FORM_337'].map(t => (
+                    <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Reference ID *</Label>
+                <Input
+                  value={ciRef}
+                  onChange={e => setCiRef(e.target.value)}
+                  placeholder="AD 2023-14-09"
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description *</Label>
+              <Input
+                value={ciDesc}
+                onChange={e => setCiDesc(e.target.value)}
+                placeholder="Inspect and replace fuel nozzle…"
+                className="h-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-content-secondary cursor-pointer">
+              <input type="checkbox" checked={ciForm337} onChange={e => setCiForm337(e.target.checked)} className="rounded" />
+              Form 337 required
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComplianceOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!ciRef.trim() || !ciDesc.trim() || addingCompliance}
+              onClick={async () => {
+                await addComplianceItem({ type: ciType, referenceId: ciRef.trim(), description: ciDesc.trim(), form337Required: ciForm337 });
+                setCiType('AD'); setCiRef(''); setCiDesc(''); setCiForm337(false);
+                setComplianceOpen(false);
+              }}
+              className="gap-2"
+            >
+              {addingCompliance && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add Item
             </Button>
           </DialogFooter>
         </DialogContent>

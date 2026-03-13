@@ -27,10 +27,11 @@ interface SquawkPanelProps {
   workOrderId: string;
 }
 
-function SquawkCard({ squawk, onApprove, onDecline }: {
+function SquawkCard({ squawk, onApprove, onDecline, onDefer }: {
   squawk: Squawk;
   onApprove: (id: string) => void;
   onDecline: (id: string) => void;
+  onDefer: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -129,6 +130,7 @@ function SquawkCard({ squawk, onApprove, onDecline }: {
                 size="sm"
                 variant="ghost"
                 className="gap-1 h-8 text-xs text-content-muted"
+                onClick={() => onDefer(squawk.id)}
               >
                 <Clock className="h-3.5 w-3.5" />
                 Defer
@@ -143,6 +145,7 @@ function SquawkCard({ squawk, onApprove, onDecline }: {
 
 export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrderId }: SquawkPanelProps) {
   const [localSquawks, setLocalSquawks] = useState(squawks);
+  const [sentRequest, setSentRequest] = useState(false);
   const { mutateAsync: updateSquawk } = useSquawkApproval(workOrderId);
 
   useEffect(() => { setLocalSquawks(squawks); }, [squawks]);
@@ -167,6 +170,17 @@ export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrder
     ));
     try {
       await updateSquawk({ squawkId: id, status: 'DECLINED' });
+    } catch {
+      setLocalSquawks(squawks);
+    }
+  };
+
+  const handleDefer = async (id: string) => {
+    setLocalSquawks(prev => prev.map(s =>
+      s.id === id ? { ...s, status: 'DEFERRED' as const } : s,
+    ));
+    try {
+      await updateSquawk({ squawkId: id, status: 'DEFERRED' });
     } catch {
       setLocalSquawks(squawks);
     }
@@ -197,6 +211,7 @@ export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrder
               squawk={squawk}
               onApprove={handleApprove}
               onDecline={handleDecline}
+              onDefer={handleDefer}
             />
           ))}
         </div>
@@ -206,8 +221,24 @@ export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrder
             <p className="text-xs text-content-muted mb-3">
               Aircraft cannot return to service while airworthiness squawks remain unapproved.
             </p>
-            <Button className="w-full" size="sm">
-              Send Approval Request to Customer
+            <Button
+              className="w-full"
+              size="sm"
+              variant={sentRequest ? 'outline' : 'default'}
+              onClick={() => {
+                const pending = localSquawks.filter(s => s.status === 'PENDING_APPROVAL');
+                const lines = pending.map((s, i) =>
+                  `${i + 1}. ${s.description}${s.estTotal ? ` (est. $${s.estTotal.toFixed(2)})` : ''}`
+                ).join('\n');
+                const subject = encodeURIComponent(`Squawk Approval Required — ${workOrderNumber}`);
+                const body = encodeURIComponent(
+                  `Please review and approve the following squawks for work order ${workOrderNumber}:\n\n${lines}\n\nPlease reply to authorize the work.`
+                );
+                window.open(`mailto:?subject=${subject}&body=${body}`);
+                setSentRequest(true);
+              }}
+            >
+              {sentRequest ? 'Approval Request Sent' : 'Send Approval Request to Customer'}
             </Button>
           </div>
         )}
