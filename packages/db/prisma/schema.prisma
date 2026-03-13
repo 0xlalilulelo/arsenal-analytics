@@ -16,14 +16,19 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  laborRates     LaborRate[]
-  technicians    Technician[]
-  customers      Customer[]
-  workOrders     WorkOrder[]
-  invoices       Invoice[]
-  parts          Part[]
-  purchaseOrders PurchaseOrder[]
-  users          User[]
+  laborRates       LaborRate[]
+  technicians      Technician[]
+  customers        Customer[]
+  workOrders       WorkOrder[]
+  invoices         Invoice[]
+  parts            Part[]
+  purchaseOrders   PurchaseOrder[]
+  users            User[]
+  quotes           Quote[]
+  markupRules      MarkupRule[]
+  aogEvents        AOGEvent[]
+  fpaSnapshots     FPASnapshot[]
+  cashFlowSnapshots CashFlowSnapshot[]
 }
 
 // ─── Auth (NextAuth v5 / Auth.js) ────────────────────────────────────────────
@@ -96,6 +101,7 @@ model Customer {
   aircraft   Aircraft[]
   workOrders WorkOrder[]
   invoices   Invoice[]
+  quotes     Quote[]
 }
 
 enum BillingTerms {
@@ -122,6 +128,7 @@ model Aircraft {
   updatedAt   DateTime @updatedAt
 
   workOrders WorkOrder[]
+  quotes     Quote[]
 }
 
 // ─── Work Orders ─────────────────────────────────────────────────────────────
@@ -149,6 +156,15 @@ model WorkOrder {
   internalNotes  String?
   estimatedTotal Float?
   actualTotal    Float?
+  // Quote linkage
+  quoteId        String?
+  quote          Quote?          @relation(fields: [quoteId], references: [id])
+  quotedAmount   Float?          // carried from approved Quote
+  depositCollected Float?        // deposit paid at quote acceptance
+  billingStage   String?         // e.g. "Stage3_Authorized", "Stage7_ReadyToInvoice"
+  // AOG linkage
+  aogEventId     String?         @unique
+  aogEvent       AOGEvent?       @relation(fields: [aogEventId], references: [id])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -230,6 +246,7 @@ model Squawk {
   estPartsTotal   Float?
   estTotal        Float?
   status          SquawkStatus @default(PENDING_APPROVAL)
+  classification  SquawkClass  @default(AIRFRAME)
   isAirworthiness Boolean      @default(false)
   approvedAt      DateTime?
   approvedBy      String?
@@ -244,6 +261,16 @@ enum SquawkStatus {
   APPROVED
   DECLINED
   DEFERRED
+}
+
+enum SquawkClass {
+  AIRFRAME
+  ENGINE
+  AVIONICS
+  PROPELLER
+  LANDING_GEAR
+  INTERIOR
+  OTHER
 }
 
 // ─── Labor ───────────────────────────────────────────────────────────────────
@@ -276,6 +303,7 @@ model LaborRate {
   createdAt  DateTime     @default(now())
 
   workOrders WorkOrder[]
+  quotes     Quote[]
 }
 
 model LaborEntry {
@@ -345,6 +373,9 @@ model PartRequest {
   purchaseOrder   PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
   receivedAt      DateTime?
   createdAt       DateTime          @default(now())
+
+  warrantyRecord  WarrantyRecord?
+  coreReturn      CoreReturn?
 }
 
 enum PartRequestStatus {
@@ -428,6 +459,11 @@ model Invoice {
   isTrial       Boolean       @default(false)
   notes         String?
   internalNotes String?
+  // Customer payment portal
+  portalToken            String?   @unique
+  stripePaymentIntentId  String?
+  stripeCheckoutUrl      String?
+  stripeCheckoutExpiry   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -526,7 +562,215 @@ enum ComplianceType {
   AD
   SB
   STC
+  ANNUAL
   FORM_337
   MAJOR_REPAIR
   MAJOR_ALTERATION
+  DER
+  OTHER
+}
+
+// ─── Quotes / Estimates ───────────────────────────────────────────────────────
+
+model Quote {
+  id           String      @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  quoteNumber  String      @unique  // QT-2025-0001
+  status       QuoteStatus @default(DRAFT)
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  aircraftId   String?
+  aircraft     Aircraft?   @relation(fields: [aircraftId], references: [id])
+  billingModel BillingModel @default(TIME_AND_MATERIALS)
+  nteAmount    Float?
+  laborRateId  String?
+  laborRate    LaborRate?  @relation(fields: [laborRateId], references: [id])
+  subtotal     Float       @default(0)
+  total        Float       @default(0)
+  depositPct   Float       @default(0)       // e.g. 0.25 = 25% deposit required
+  depositAmount Float      @default(0)
+  validDays    Int         @default(30)
+  expiresAt    DateTime?
+  sentAt       DateTime?
+  approvedAt   DateTime?
+  approvedBy   String?     // customer name who approved
+  declinedAt   DateTime?
+  declineReason String?
+  notes        String?
+  internalNotes String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  lines      QuoteLine[]
+  workOrders WorkOrder[]
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  VIEWED
+  APPROVED
+  DECLINED
+  EXPIRED
+  CONVERTED  // converted to a WorkOrder
+}
+
+model QuoteLine {
+  id          String           @id @default(cuid())
+  quoteId     String
+  quote       Quote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  category    QuoteLineCategory
+  description String
+  qty         Float            @default(1)
+  unitPrice   Float
+  total       Float
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+}
+
+enum QuoteLineCategory {
+  LABOR
+  PARTS
+  SUBCONTRACT
+  SHOP_SUPPLIES
+  FREIGHT
+  OTHER
+}
+
+// ─── Parts Markup Rules ───────────────────────────────────────────────────────
+
+model MarkupRule {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  label     String       // "< $25", "$25–$500", etc.
+  minCost   Float        // inclusive lower bound (0 for first tier)
+  maxCost   Float?       // null = no upper bound (last tier)
+  markupPct Float        // e.g. 1.0 = 100%, 0.75 = 75%
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([orgId, minCost])
+}
+
+// ─── AOG Events ──────────────────────────────────────────────────────────────
+
+model AOGEvent {
+  id            String    @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id])
+  activatedAt   DateTime  @default(now())
+  location      String?   // airport ICAO or address
+  calloutFee    Float     @default(0)
+  mileage       Float     @default(0)
+  mileageRate   Float     @default(1.25)
+  driveHours    Float     @default(0)
+  driveRate     Float     @default(70.0)   // per tech per hour
+  techCount     Int       @default(1)
+  minimumHours  Float     @default(2.0)    // 2hr minimum callout
+  resolvedAt    DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workOrder WorkOrder?    // inverse of WorkOrder.aogEvent
+}
+
+// ─── Warranty & Core Returns ──────────────────────────────────────────────────
+
+model WarrantyRecord {
+  id             String        @id @default(cuid())
+  partRequestId  String        @unique
+  partRequest    PartRequest   @relation(fields: [partRequestId], references: [id])
+  vendor         String
+  warrantyMonths Int
+  installDate    DateTime?
+  expiresAt      DateTime?
+  claimStatus    WarrantyClaimStatus @default(NONE)
+  claimRef       String?
+  claimDate      DateTime?
+  claimAmount    Float?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+enum WarrantyClaimStatus {
+  NONE
+  PENDING
+  APPROVED
+  DENIED
+  REPLACED
+}
+
+model CoreReturn {
+  id              String      @id @default(cuid())
+  partRequestId   String      @unique
+  partRequest     PartRequest @relation(fields: [partRequestId], references: [id])
+  corePartNumber  String
+  coreDescription String?
+  coreValue       Float       // expected credit
+  vendor          String
+  returnDueDate   DateTime?
+  returnedAt      DateTime?
+  trackingNumber  String?
+  creditReceived  Float?
+  creditApplied   Boolean     @default(false)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ─── FP&A Snapshots ───────────────────────────────────────────────────────────
+
+model FPASnapshot {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  month           String   // "2025-01" format
+  revenue         Float    @default(0)
+  laborBilled     Float    @default(0)
+  laborCost       Float    @default(0)
+  partsBilled     Float    @default(0)
+  partsCost       Float    @default(0)
+  grossProfit     Float    @default(0)
+  grossMarginPct  Float    @default(0)
+  billableHours   Float    @default(0)
+  totalHours      Float    @default(0)
+  utilizationPct  Float    @default(0)
+  avgDaysToInvoice Float   @default(0)
+  aogCount        Int      @default(0)
+  woCount         Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([orgId, month])
+}
+
+model CashFlowSnapshot {
+  id              String   @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  snapshotDate    DateTime @default(now())
+  // AR by aging bucket
+  arCurrent       Float    @default(0)
+  ar1to30         Float    @default(0)
+  ar31to60        Float    @default(0)
+  ar61to90        Float    @default(0)
+  ar90plus        Float    @default(0)
+  // Expected collections
+  arExpected30d   Float    @default(0)
+  arExpected60d   Float    @default(0)
+  arExpected90d   Float    @default(0)
+  // WIP projection
+  wipValue        Float    @default(0)
+  wipProjected30d Float    @default(0)
+  // Obligations
+  partsOnOrder    Float    @default(0)  // open PO values
+  // Net forecast
+  forecastBalance30d Float @default(0)
+  forecastBalance60d Float @default(0)
+  forecastBalance90d Float @default(0)
+  createdAt       DateTime @default(now())
 }

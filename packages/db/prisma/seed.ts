@@ -1,4 +1,4 @@
-import { PrismaClient, WorkOrderStatus, WorkOrderType, BillingModel, InvoiceStatus, PaymentMethod, SquawkStatus, PartCondition, PartRequestStatus, POStatus, ComplianceType, LineItemStatus } from '@prisma/client';
+import { PrismaClient, WorkOrderStatus, WorkOrderType, BillingModel, InvoiceStatus, PaymentMethod, SquawkStatus, PartCondition, PartRequestStatus, POStatus, ComplianceType, LineItemStatus, QuoteStatus, QuoteLineCategory } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -718,6 +718,109 @@ async function main() {
     ],
   });
 
+  // ─── Markup Rules (sliding scale) ────────────────────────────────────────────
+
+  await prisma.markupRule.createMany({
+    skipDuplicates: true,
+    data: [
+      { id: 'mr-1', orgId: org.id, label: '< $25',         minCost: 0,    maxCost: 25,    markupPct: 1.00, sortOrder: 0 },
+      { id: 'mr-2', orgId: org.id, label: '$25 – $500',    minCost: 25,   maxCost: 500,   markupPct: 0.75, sortOrder: 1 },
+      { id: 'mr-3', orgId: org.id, label: '$500 – $2,000', minCost: 500,  maxCost: 2000,  markupPct: 0.50, sortOrder: 2 },
+      { id: 'mr-4', orgId: org.id, label: '$2K – $5K',     minCost: 2000, maxCost: 5000,  markupPct: 0.35, sortOrder: 3 },
+      { id: 'mr-5', orgId: org.id, label: '> $5K',         minCost: 5000, maxCost: null,  markupPct: 0.25, sortOrder: 4 },
+    ],
+  });
+
+  // ─── Sample Quotes ────────────────────────────────────────────────────────────
+
+  const qCustomer1 = customer1;
+  const qAircraft1 = qCustomer1 ? await prisma.aircraft.findFirst({ where: { customerId: qCustomer1.id } }) : null;
+
+  if (qCustomer1 && qAircraft1) {
+    const quote1 = await prisma.quote.upsert({
+      where: { quoteNumber: 'QT-2025-0001' },
+      update: {},
+      create: {
+        id: 'quote-1',
+        orgId: org.id,
+        quoteNumber: 'QT-2025-0001',
+        status: QuoteStatus.APPROVED,
+        customerId: qCustomer1.id,
+        aircraftId: qAircraft1.id,
+        billingModel: BillingModel.TIME_AND_MATERIALS,
+        laborRateId: standardRate.id,
+        subtotal: 3850.00,
+        total: 3850.00,
+        depositPct: 0.25,
+        depositAmount: 962.50,
+        validDays: 30,
+        expiresAt: new Date('2025-02-15'),
+        approvedAt: new Date('2025-01-20'),
+        approvedBy: 'John D. Owner',
+        notes: 'Annual inspection + squawk repairs. Customer approved verbally and via email.',
+      },
+    });
+
+    await prisma.quoteLine.createMany({
+      skipDuplicates: true,
+      data: [
+        { id: 'ql-1', quoteId: quote1.id, category: QuoteLineCategory.LABOR, description: 'Annual Inspection — 100hr AMP', qty: 8, unitPrice: 115.00, total: 920.00, sortOrder: 0 },
+        { id: 'ql-2', quoteId: quote1.id, category: QuoteLineCategory.LABOR, description: 'Mag timing & inspection', qty: 2, unitPrice: 115.00, total: 230.00, sortOrder: 1 },
+        { id: 'ql-3', quoteId: quote1.id, category: QuoteLineCategory.PARTS, description: 'Champion spark plugs (12)', qty: 12, unitPrice: 28.44, total: 341.25, sortOrder: 2 },
+        { id: 'ql-4', quoteId: quote1.id, category: QuoteLineCategory.PARTS, description: 'Champion oil filter CH48108-1', qty: 1, unitPrice: 37.00, total: 37.00, sortOrder: 3 },
+        { id: 'ql-5', quoteId: quote1.id, category: QuoteLineCategory.LABOR, description: 'Brake inspection & lining replacement (est.)', qty: 4, unitPrice: 115.00, total: 460.00, sortOrder: 4 },
+        { id: 'ql-6', quoteId: quote1.id, category: QuoteLineCategory.PARTS, description: 'Brake lining assembly — Cleveland 30-67B', qty: 1, unitPrice: 136.00, total: 136.00, sortOrder: 5 },
+        { id: 'ql-7', quoteId: quote1.id, category: QuoteLineCategory.SHOP_SUPPLIES, description: 'Shop supplies & consumables (3.5%)', qty: 1, unitPrice: 56.35, total: 56.35, sortOrder: 6 },
+        { id: 'ql-8', quoteId: quote1.id, category: QuoteLineCategory.LABOR, description: 'Compression check & borescope', qty: 2, unitPrice: 115.00, total: 230.00, sortOrder: 7 },
+        { id: 'ql-9', quoteId: quote1.id, category: QuoteLineCategory.OTHER, description: 'IFR certification (pitot-static system test)', qty: 1, unitPrice: 350.00, total: 350.00, sortOrder: 8 },
+        { id: 'ql-10', quoteId: quote1.id, category: QuoteLineCategory.OTHER, description: 'ELT battery (per AD)', qty: 1, unitPrice: 89.40, total: 89.40, sortOrder: 9 },
+      ],
+    });
+
+    // Draft quote for another customer
+    const qCustomer2 = await prisma.customer.findFirst({ where: { orgId: org.id, id: { not: qCustomer1.id } }, orderBy: { createdAt: 'asc' } });
+    const qAircraft2 = qCustomer2 ? await prisma.aircraft.findFirst({ where: { customerId: qCustomer2.id } }) : null;
+
+    if (qCustomer2 && qAircraft2) {
+      const quote2 = await prisma.quote.upsert({
+        where: { quoteNumber: 'QT-2025-0002' },
+        update: {},
+        create: {
+          id: 'quote-2',
+          orgId: org.id,
+          quoteNumber: 'QT-2025-0002',
+          status: QuoteStatus.SENT,
+          customerId: qCustomer2.id,
+          aircraftId: qAircraft2.id,
+          billingModel: BillingModel.NOT_TO_EXCEED,
+          nteAmount: 8500.00,
+          laborRateId: standardRate.id,
+          subtotal: 7200.00,
+          total: 7200.00,
+          depositPct: 0.30,
+          depositAmount: 2160.00,
+          validDays: 30,
+          expiresAt: new Date('2026-04-13'),
+          sentAt: new Date('2026-03-14'),
+          notes: 'Engine top overhaul. NTE cap agreed at $8,500. Includes cylinder removal, honing, ring replacement.',
+        },
+      });
+
+      await prisma.quoteLine.createMany({
+        skipDuplicates: true,
+        data: [
+          { id: 'ql-11', quoteId: quote2.id, category: QuoteLineCategory.LABOR, description: 'Engine top overhaul — 4 cylinders', qty: 24, unitPrice: 115.00, total: 2760.00, sortOrder: 0 },
+          { id: 'ql-12', quoteId: quote2.id, category: QuoteLineCategory.LABOR, description: 'Compression check, borescope, diagnosis', qty: 2, unitPrice: 115.00, total: 230.00, sortOrder: 1 },
+          { id: 'ql-13', quoteId: quote2.id, category: QuoteLineCategory.PARTS, description: 'Cylinder kit — Superior Air Parts (x4)', qty: 4, unitPrice: 680.00, total: 2720.00, sortOrder: 2 },
+          { id: 'ql-14', quoteId: quote2.id, category: QuoteLineCategory.PARTS, description: 'Piston ring sets (x4)', qty: 4, unitPrice: 125.00, total: 500.00, sortOrder: 3 },
+          { id: 'ql-15', quoteId: quote2.id, category: QuoteLineCategory.SHOP_SUPPLIES, description: 'Shop supplies (3.5%)', qty: 1, unitPrice: 96.60, total: 96.60, sortOrder: 4 },
+          { id: 'ql-16', quoteId: quote2.id, category: QuoteLineCategory.SUBCONTRACT, description: 'Crankshaft inspection (subcontracted — NDT)', qty: 1, unitPrice: 450.00, total: 450.00, sortOrder: 5 },
+          { id: 'ql-17', quoteId: quote2.id, category: QuoteLineCategory.OTHER, description: 'Return to service test flight (0.5hr)', qty: 1, unitPrice: 120.00, total: 120.00, sortOrder: 6 },
+        ],
+      });
+    }
+  }
+
   // ─── Compliance Items ─────────────────────────────────────────────────────────
 
   await prisma.complianceItem.createMany({
@@ -752,6 +855,8 @@ async function main() {
   console.log(`   Invoices: 4 (1 Paid, 1 Overdue, 1 Sent, 1 Partial)`);
   console.log(`   Parts: 5`);
   console.log(`   Purchase Orders: 2`);
+  console.log(`   Markup Rules: 5 tiers (Phase 1)`);
+  console.log(`   Quotes: 2 (1 Approved, 1 Sent — Phase 1)`);
 }
 
 main()
