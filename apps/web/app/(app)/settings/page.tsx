@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Users, DollarSign, Wrench, Building2, ChevronRight, Package } from 'lucide-react';
+import { Users, DollarSign, Wrench, Building2, ChevronRight, Package, CheckCircle2, Loader2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const SETTINGS_NAV = [
   {
@@ -35,7 +37,60 @@ const SETTINGS_NAV = [
   },
 ];
 
+function useSaveStatus() {
+  const [saved, setSaved] = useState(false);
+  function flash() {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+  return { saved, flash };
+}
+
 export default function SettingsPage() {
+  const qc = useQueryClient();
+
+  // ── Org info ──────────────────────────────────────────────────────────────
+  const { data: orgData } = useQuery({
+    queryKey: ['settings-org'],
+    queryFn: () => fetch('/api/settings/org').then(r => r.json()),
+  });
+  const [shopName, setShopName] = useState('');
+  useEffect(() => { if (orgData?.data?.name) setShopName(orgData.data.name); }, [orgData]);
+
+  const orgSave = useSaveStatus();
+  const { mutateAsync: saveOrg, isPending: orgSaving } = useMutation({
+    mutationFn: () => fetch('/api/settings/org', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: shopName }),
+    }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings-org'] }); orgSave.flash(); },
+  });
+
+  // ── Billing defaults ──────────────────────────────────────────────────────
+  const { data: defaultsData } = useQuery({
+    queryKey: ['settings-defaults'],
+    queryFn: () => fetch('/api/settings/defaults').then(r => r.json()),
+  });
+  const [laborRate, setLaborRate] = useState('115.00');
+  const [aogMultiplier, setAogMultiplier] = useState('1.5');
+  useEffect(() => {
+    if (defaultsData?.data?.laborRate) {
+      setLaborRate(defaultsData.data.laborRate.rate.toFixed(2));
+      setAogMultiplier(defaultsData.data.laborRate.multiplier?.toFixed(1) ?? '1.5');
+    }
+  }, [defaultsData]);
+
+  const defaultsSave = useSaveStatus();
+  const { mutateAsync: saveDefaults, isPending: defaultsSaving } = useMutation({
+    mutationFn: () => fetch('/api/settings/defaults', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ laborRate: parseFloat(laborRate), aogMultiplier: parseFloat(aogMultiplier) }),
+    }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings-defaults'] }); defaultsSave.flash(); },
+  });
+
   return (
     <div className="flex flex-col h-full">
       <Topbar title="Settings" subtitle="Shop configuration and account management" />
@@ -54,23 +109,36 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="shop-name" className="text-xs">Shop Name</Label>
-                <Input id="shop-name" defaultValue="Arsenal Aviation Services" className="mt-1.5 h-8 text-sm" />
+                <Input
+                  id="shop-name"
+                  value={shopName}
+                  onChange={e => setShopName(e.target.value)}
+                  className="mt-1.5 h-8 text-sm"
+                />
               </div>
               <div>
-                <Label htmlFor="repair-station" className="text-xs">FAA Repair Station #</Label>
+                <Label htmlFor="repair-station" className="text-xs">FAA Repair Station # <span className="text-content-muted">(display only)</span></Label>
                 <Input id="repair-station" defaultValue="RS4XY9012" className="mt-1.5 h-8 text-sm" />
               </div>
               <div>
-                <Label htmlFor="phone" className="text-xs">Phone</Label>
+                <Label htmlFor="phone" className="text-xs">Phone <span className="text-content-muted">(display only)</span></Label>
                 <Input id="phone" defaultValue="(555) 867-5309" className="mt-1.5 h-8 text-sm" />
               </div>
               <div>
-                <Label htmlFor="email" className="text-xs">Billing Email</Label>
+                <Label htmlFor="email" className="text-xs">Billing Email <span className="text-content-muted">(display only)</span></Label>
                 <Input id="email" defaultValue="billing@arsenalaviation.com" className="mt-1.5 h-8 text-sm" />
               </div>
             </div>
-            <div className="flex justify-end">
-              <Button size="sm" className="h-8 text-xs">Save Changes</Button>
+            <div className="flex items-center justify-end gap-2">
+              {orgSave.saved && (
+                <span className="text-xs text-intent-success flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />Saved
+                </span>
+              )}
+              <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => saveOrg()} disabled={orgSaving || !shopName.trim()}>
+                {orgSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -88,31 +156,53 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <Label htmlFor="labor-rate" className="text-xs">Default Labor Rate ($/hr)</Label>
-                <Input id="labor-rate" defaultValue="115.00" type="number" className="mt-1.5 h-8 text-sm" />
+                <Input
+                  id="labor-rate"
+                  type="number"
+                  step="0.01"
+                  value={laborRate}
+                  onChange={e => setLaborRate(e.target.value)}
+                  className="mt-1.5 h-8 text-sm font-mono"
+                />
               </div>
               <div>
                 <Label htmlFor="aog-multiplier" className="text-xs">AOG Rate Multiplier</Label>
-                <Input id="aog-multiplier" defaultValue="1.5" type="number" step="0.1" className="mt-1.5 h-8 text-sm" />
+                <Input
+                  id="aog-multiplier"
+                  type="number"
+                  step="0.1"
+                  value={aogMultiplier}
+                  onChange={e => setAogMultiplier(e.target.value)}
+                  className="mt-1.5 h-8 text-sm font-mono"
+                />
               </div>
               <div>
-                <Label htmlFor="parts-markup" className="text-xs">Default Parts Markup (%)</Label>
-                <Input id="parts-markup" defaultValue="30" type="number" className="mt-1.5 h-8 text-sm" />
+                <Label htmlFor="parts-markup" className="text-xs">Parts Markup <span className="text-content-muted">(use Markup Rules)</span></Label>
+                <Input id="parts-markup" defaultValue="Sliding scale" disabled className="mt-1.5 h-8 text-sm text-content-muted" />
               </div>
               <div>
-                <Label htmlFor="shop-supplies" className="text-xs">Shop Supplies % (of labor)</Label>
+                <Label htmlFor="shop-supplies" className="text-xs">Shop Supplies % <span className="text-content-muted">(display only)</span></Label>
                 <Input id="shop-supplies" defaultValue="3.5" type="number" step="0.1" className="mt-1.5 h-8 text-sm" />
               </div>
               <div>
-                <Label htmlFor="tax-rate" className="text-xs">Default Tax Rate (%)</Label>
+                <Label htmlFor="tax-rate" className="text-xs">Default Tax Rate (%) <span className="text-content-muted">(display only)</span></Label>
                 <Input id="tax-rate" defaultValue="0" type="number" step="0.01" className="mt-1.5 h-8 text-sm" />
               </div>
               <div>
-                <Label htmlFor="billing-terms" className="text-xs">Default Payment Terms</Label>
+                <Label htmlFor="billing-terms" className="text-xs">Default Terms <span className="text-content-muted">(display only)</span></Label>
                 <Input id="billing-terms" defaultValue="NET30" className="mt-1.5 h-8 text-sm" />
               </div>
             </div>
-            <div className="flex justify-end">
-              <Button size="sm" className="h-8 text-xs">Save Changes</Button>
+            <div className="flex items-center justify-end gap-2">
+              {defaultsSave.saved && (
+                <span className="text-xs text-intent-success flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />Saved
+                </span>
+              )}
+              <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => saveDefaults()} disabled={defaultsSaving}>
+                {defaultsSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
           </CardContent>
         </Card>

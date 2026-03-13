@@ -6,19 +6,52 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JobProfitabilityChart } from '@/components/analytics/JobProfitabilityChart';
 import { formatCurrency, formatPct } from '@/lib/utils';
-import { BarChart3, TrendingUp, Users, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { useKpiMetrics } from '@/hooks/useAnalytics';
 
-const DEMO_MECHANIC_STATS = [
-  { id: 't-1', name: 'Marcus Williams', certifications: ['A&P', 'IA'], billedHours: 142.5, availableHours: 160, revenueGenerated: 16387.50, revenuePerHour: 115.0 },
-  { id: 't-2', name: 'Deja Thomas', certifications: ['A&P'], billedHours: 128.0, availableHours: 160, revenueGenerated: 16640.00, revenuePerHour: 130.0 },
-  { id: 't-3', name: 'Carlos Rivera', certifications: ['A&P'], billedHours: 98.25, availableHours: 160, revenueGenerated: 9825.00, revenuePerHour: 100.0 },
-  { id: 't-4', name: 'Priya Nair', certifications: ['A&P', 'IA'], billedHours: 155.0, availableHours: 160, revenueGenerated: 19375.00, revenuePerHour: 125.0 },
+const DATE_RANGES = [
+  { label: 'This Month',    value: 'this-month' },
+  { label: 'Last Month',    value: 'last-month' },
+  { label: 'Last 3 Months', value: 'last-3-months' },
+  { label: 'YTD',           value: 'ytd' },
+  { label: 'Last 12 Months', value: 'last-12-months' },
 ];
 
-const DATE_RANGES = ['This Month', 'Last Month', 'Last 3 Months', 'YTD', 'Last 12 Months'];
+type TechStat = {
+  id: string;
+  name: string;
+  certifications: string[];
+  billedHours: number;
+  availableHours: number;
+  revenueGenerated: number;
+  revenuePerHour: number;
+};
+
+function useTechnicianEfficiency(range: string) {
+  return useQuery({
+    queryKey: ['tech-efficiency', range],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/technician-efficiency?range=${range}`);
+      if (!res.ok) throw new Error('Failed to fetch technician efficiency');
+      return res.json() as Promise<{ data: TechStat[]; totals: { billedHours: number; availableHours: number; revenueGenerated: number } }>;
+    },
+  });
+}
 
 export default function ReportsPage() {
-  const [dateRange, setDateRange] = useState('This Month');
+  const [dateRange, setDateRange] = useState('this-month');
+  const { data: techData, isLoading: techLoading } = useTechnicianEfficiency(dateRange);
+  const { data: kpiData } = useKpiMetrics();
+
+  const stats = techData?.data ?? [];
+  const totals = techData?.totals;
+  const kpi = kpiData?.data;
+
+  const revenueDelta = kpi ? ((kpi.revenueThisMonth - kpi.revenueLastMonth) / (kpi.revenueLastMonth || 1)) * 100 : 0;
+  const shopUtil = totals && totals.availableHours > 0
+    ? totals.billedHours / totals.availableHours
+    : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -28,17 +61,17 @@ export default function ReportsPage() {
         actions={
           <div className="flex items-center gap-2">
             <div className="flex border border-surface-hover rounded-md overflow-hidden">
-              {DATE_RANGES.map(range => (
+              {DATE_RANGES.map(({ label, value }) => (
                 <button
-                  key={range}
-                  onClick={() => setDateRange(range)}
+                  key={value}
+                  onClick={() => setDateRange(value)}
                   className={`px-2.5 py-1 text-xs transition-colors ${
-                    dateRange === range
+                    dateRange === value
                       ? 'bg-intent-primary text-white'
                       : 'text-content-muted hover:text-content-primary'
                   }`}
                 >
-                  {range}
+                  {label}
                 </button>
               ))}
             </div>
@@ -48,28 +81,69 @@ export default function ReportsPage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Summary row */}
+        {/* KPI Summary row */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {[
-            { label: 'Revenue', value: '$62,227', delta: '+8.4%', positive: true, icon: <BarChart3 className="h-4 w-4" /> },
-            { label: 'Gross Margin', value: '41.2%', delta: '+2.1pp', positive: true, icon: <TrendingUp className="h-4 w-4" /> },
-            { label: 'Avg Job Value', value: '$2,850', delta: '+5.2%', positive: true, icon: <ArrowUpRight className="h-4 w-4" /> },
-            { label: 'Shop Utilization', value: '79.6%', delta: '-3.1pp', positive: false, icon: <Users className="h-4 w-4" /> },
-          ].map(({ label, value, delta, positive, icon }) => (
-            <Card key={label}>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-content-muted">{label}</p>
-                  <span className="text-content-muted">{icon}</span>
-                </div>
-                <p className="text-xl font-bold font-mono text-content-primary">{value}</p>
-                <p className={`text-xs mt-0.5 flex items-center gap-0.5 ${positive ? 'text-intent-success' : 'text-intent-danger'}`}>
-                  {positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                  {delta} vs prior period
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-content-muted">Revenue (this month)</p>
+                <BarChart3 className="h-4 w-4 text-content-muted" />
+              </div>
+              <p className="text-xl font-bold font-mono text-content-primary">
+                {kpi ? formatCurrency(kpi.revenueThisMonth) : '—'}
+              </p>
+              {kpi && (
+                <p className={`text-xs mt-0.5 flex items-center gap-0.5 ${revenueDelta >= 0 ? 'text-intent-success' : 'text-intent-danger'}`}>
+                  {revenueDelta >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                  {revenueDelta >= 0 ? '+' : ''}{revenueDelta.toFixed(1)}% vs last month
                 </p>
-              </CardContent>
-            </Card>
-          ))}
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-content-muted">Shop Utilization</p>
+                <Users className="h-4 w-4 text-content-muted" />
+              </div>
+              <p className="text-xl font-bold font-mono text-content-primary">
+                {shopUtil != null ? formatPct(shopUtil) : '—'}
+              </p>
+              {totals && (
+                <p className="text-xs text-content-muted mt-0.5">
+                  {totals.billedHours.toFixed(0)}h of {totals.availableHours.toFixed(0)}h available
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-content-muted">Revenue Generated</p>
+                <TrendingUp className="h-4 w-4 text-content-muted" />
+              </div>
+              <p className="text-xl font-bold font-mono text-content-primary">
+                {totals ? formatCurrency(totals.revenueGenerated) : '—'}
+              </p>
+              <p className="text-xs text-content-muted mt-0.5">
+                {DATE_RANGES.find(r => r.value === dateRange)?.label ?? ''}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-content-muted">Active Work Orders</p>
+                <ArrowUpRight className="h-4 w-4 text-content-muted" />
+              </div>
+              <p className="text-xl font-bold font-mono text-content-primary">
+                {kpi ? kpi.activeWoCount : '—'}
+              </p>
+              {kpi?.aogCount > 0 && (
+                <p className="text-xs text-intent-danger mt-0.5">{kpi.aogCount} AOG active</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Job Profitability Chart */}
@@ -88,82 +162,89 @@ export default function ReportsPage() {
         {/* Mechanic Efficiency Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Mechanic Efficiency — {dateRange}</CardTitle>
+            <CardTitle className="text-sm">
+              Mechanic Efficiency — {DATE_RANGES.find(r => r.value === dateRange)?.label}
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-hover">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Technician</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Certifications</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Billed hrs</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Available hrs</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Utilization</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Revenue Generated</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">$/hr</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-hover">
-                {DEMO_MECHANIC_STATS.map(tech => {
-                  const utilization = tech.billedHours / tech.availableHours;
-                  const utilizationColor =
-                    utilization >= 0.85
-                      ? 'text-intent-success'
-                      : utilization >= 0.70
-                        ? 'text-intent-warning'
-                        : 'text-intent-danger';
+            {techLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-content-muted" />
+              </div>
+            ) : stats.length === 0 ? (
+              <p className="text-sm text-content-muted p-4">No labor data for this period.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-hover">
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Technician</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Certifications</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Billed hrs</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Available hrs</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Utilization</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Revenue Generated</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">$/hr</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-hover">
+                  {stats.map(tech => {
+                    const utilization = tech.billedHours / tech.availableHours;
+                    const utilizationColor =
+                      utilization >= 0.85 ? 'text-intent-success' :
+                      utilization >= 0.70 ? 'text-intent-warning' :
+                      'text-intent-danger';
 
-                  return (
-                    <tr key={tech.id} className="hover:bg-surface-hover/30">
-                      <td className="py-3 px-4 font-medium text-content-primary">{tech.name}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex gap-1">
-                          {tech.certifications.map(cert => (
-                            <Badge key={cert} variant="default" className="text-xs py-0">{cert}</Badge>
-                          ))}
-                        </div>
+                    return (
+                      <tr key={tech.id} className="hover:bg-surface-hover/30">
+                        <td className="py-3 px-4 font-medium text-content-primary">{tech.name}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex gap-1">
+                            {tech.certifications.map(cert => (
+                              <Badge key={cert} variant="default" className="text-xs py-0">{cert}</Badge>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-xs text-content-primary">
+                          {tech.billedHours.toFixed(1)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-xs text-content-muted">
+                          {tech.availableHours.toFixed(0)}
+                        </td>
+                        <td className={`py-3 px-4 text-right font-mono text-sm font-bold ${tech.billedHours > 0 ? utilizationColor : 'text-content-muted'}`}>
+                          {tech.billedHours > 0 ? formatPct(utilization) : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-xs text-intent-primary">
+                          {formatCurrency(tech.revenueGenerated)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-xs text-content-secondary">
+                          {tech.revenuePerHour > 0 ? `$${tech.revenuePerHour.toFixed(0)}/h` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {totals && (
+                  <tfoot className="border-t border-surface-hover bg-surface-panel">
+                    <tr>
+                      <td colSpan={2} className="py-2.5 px-4 text-xs font-semibold text-content-secondary">Shop Total</td>
+                      <td className="py-2.5 px-4 text-right font-mono text-xs font-bold text-content-primary">
+                        {totals.billedHours.toFixed(1)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-content-primary">
-                        {tech.billedHours.toFixed(1)}
+                      <td className="py-2.5 px-4 text-right font-mono text-xs text-content-muted">
+                        {totals.availableHours.toFixed(0)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-content-muted">
-                        {tech.availableHours.toFixed(0)}
+                      <td className="py-2.5 px-4 text-right font-mono text-sm font-bold text-intent-primary">
+                        {totals.availableHours > 0 ? formatPct(totals.billedHours / totals.availableHours) : '—'}
                       </td>
-                      <td className={`py-3 px-4 text-right font-mono text-sm font-bold ${utilizationColor}`}>
-                        {formatPct(utilization)}
+                      <td className="py-2.5 px-4 text-right font-mono text-xs font-bold text-intent-gold">
+                        {formatCurrency(totals.revenueGenerated)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-intent-primary">
-                        {formatCurrency(tech.revenueGenerated)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-content-secondary">
-                        ${tech.revenuePerHour.toFixed(0)}/h
-                      </td>
+                      <td />
                     </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot className="border-t border-surface-hover bg-surface-panel">
-                <tr>
-                  <td colSpan={2} className="py-2.5 px-4 text-xs font-semibold text-content-secondary">Shop Total</td>
-                  <td className="py-2.5 px-4 text-right font-mono text-xs font-bold text-content-primary">
-                    {DEMO_MECHANIC_STATS.reduce((s, t) => s + t.billedHours, 0).toFixed(1)}
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono text-xs text-content-muted">
-                    {DEMO_MECHANIC_STATS.reduce((s, t) => s + t.availableHours, 0).toFixed(0)}
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono text-sm font-bold text-intent-primary">
-                    {formatPct(
-                      DEMO_MECHANIC_STATS.reduce((s, t) => s + t.billedHours, 0) /
-                      DEMO_MECHANIC_STATS.reduce((s, t) => s + t.availableHours, 0)
-                    )}
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono text-xs font-bold text-intent-gold">
-                    {formatCurrency(DEMO_MECHANIC_STATS.reduce((s, t) => s + t.revenueGenerated, 0))}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+                  </tfoot>
+                )}
+              </table>
+            )}
           </CardContent>
         </Card>
       </div>

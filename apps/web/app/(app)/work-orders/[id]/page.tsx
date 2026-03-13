@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { LogTimeDialog } from '@/components/labor/LogTimeDialog';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
@@ -31,10 +33,35 @@ function statusBadgeVariant(status: string) {
 export default function WorkOrderDetailPage() {
   const [squawkPanelOpen, setSquawkPanelOpen] = useState(false);
   const [logTimeOpen, setLogTimeOpen] = useState(false);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const { id: workOrderId } = useParams<{ id: string }>();
+  const router = useRouter();
+  const qc = useQueryClient();
 
   const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
   const wo = data?.data;
+
+  const { mutateAsync: generateInvoice, isPending: invoicePending } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workOrderId, customerId: wo!.customerId }),
+      });
+      if (!res.ok) throw new Error('Failed to generate invoice');
+      return res.json();
+    },
+    onSuccess: async (result) => {
+      // Mark WO as invoiced
+      await fetch(`/api/work-orders/${workOrderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'INVOICED' }),
+      });
+      qc.invalidateQueries({ queryKey: ['work-order', workOrderId] });
+      router.push(`/invoices/${result.data.id}`);
+    },
+  });
 
   if (isLoading) {
     return (
@@ -95,7 +122,16 @@ export default function WorkOrderDetailPage() {
               <AlertCircle className="h-3.5 w-3.5" />
               Squawks ({wo.squawks.length})
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs">Generate Invoice</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => setInvoiceDialogOpen(true)}
+              disabled={wo.status === 'INVOICED'}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {wo.status === 'INVOICED' ? 'Invoiced' : 'Generate Invoice'}
+            </Button>
           </div>
         }
       />
@@ -457,6 +493,53 @@ export default function WorkOrderDetailPage() {
         onClose={() => setLogTimeOpen(false)}
         workOrderId={workOrderId}
       />
+
+      {/* Generate Invoice Dialog */}
+      <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Generate Invoice</DialogTitle>
+            <DialogDescription>
+              Review the billing summary for <span className="font-mono font-semibold">{wo?.number}</span> before generating.
+            </DialogDescription>
+          </DialogHeader>
+          {wo && (
+            <div className="space-y-2 text-sm py-1">
+              <div className="flex justify-between">
+                <span className="text-content-muted">Labor ({wo.laborEntries.filter(e => e.billable).length} entries)</span>
+                <span className="font-mono">{formatCurrency(totalLaborBilled)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-content-muted">Parts (received)</span>
+                <span className="font-mono">{formatCurrency(
+                  wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0)
+                )}</span>
+              </div>
+              <div className="flex justify-between text-content-muted">
+                <span>Shop Supplies (3.5%)</span>
+                <span className="font-mono">{formatCurrency(shopSupplies)}</span>
+              </div>
+              <div className="flex justify-between font-semibold border-t border-surface-hover pt-2">
+                <span className="text-content-primary">Invoice Total</span>
+                <span className="font-mono text-intent-gold">{formatCurrency(
+                  totalLaborBilled + shopSupplies +
+                  wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0)
+                )}</span>
+              </div>
+              <p className="text-xs text-content-muted pt-1">
+                A DRAFT invoice will be created. You can review and finalize before sending to the customer.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)} disabled={invoicePending}>Cancel</Button>
+            <Button onClick={async () => { setInvoiceDialogOpen(false); await generateInvoice(); }} disabled={invoicePending} className="gap-2">
+              {invoicePending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Draft Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
