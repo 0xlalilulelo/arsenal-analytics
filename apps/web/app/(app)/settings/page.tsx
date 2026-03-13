@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Users, DollarSign, Wrench, Building2, ChevronRight } from 'lucide-react';
+import { Users, DollarSign, Wrench, Building2, ChevronRight, Package } from 'lucide-react';
 
 const SETTINGS_NAV = [
   {
@@ -26,6 +26,12 @@ const SETTINGS_NAV = [
     icon: <DollarSign className="h-5 w-5" />,
     title: 'Labor Rates',
     description: 'Shop-wide default labor rates, AOG multipliers, and markup defaults',
+  },
+  {
+    href: '/settings/markup-rules',
+    icon: <Package className="h-5 w-5" />,
+    title: 'Parts Markup Rules',
+    description: 'Sliding-scale markup tiers by part cost — 5 configurable bands with live preview',
   },
 ];
 

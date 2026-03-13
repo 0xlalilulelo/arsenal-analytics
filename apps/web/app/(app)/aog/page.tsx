@@ -1,21 +1,225 @@
 'use client';
+import { useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { AlertTriangle, Clock, Plane, Plus, Loader2 } from 'lucide-react';
+import { AlertTriangle, Clock, Plane, Plus, Loader2, MapPin, Car, Users, FileText, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useWorkOrders } from '@/hooks/useWorkOrders';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 const AOG_RATE_MULTIPLIER = 1.5;
 const BASE_RATE = 115.00;
 const AOG_RATE = BASE_RATE * AOG_RATE_MULTIPLIER;
 
+type AogWO = {
+  id: string;
+  number: string;
+  customerId: string;
+  billingModel: string;
+  estimatedTotal: number | null;
+  dateOpened: string;
+  estimatedClose: string | null;
+  customer: { name: string };
+  aircraft: { nNumber: string; make: string; model: string };
+  _count: { laborEntries: number; squawks: number; partRequests: number };
+};
+
+function useUpdateAOGEvent(workOrderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      location?: string; mileage?: number; driveHours?: number;
+      techCount?: number; resolvedAt?: string | null; notes?: string;
+    }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/aog-event`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update AOG event');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-orders'] }),
+  });
+}
+
+function useGenerateInterimInvoice() {
+  const router = useRouter();
+  return useMutation({
+    mutationFn: async (data: { workOrderId: string; customerId: string }) => {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to generate invoice');
+      return res.json();
+    },
+    onSuccess: (result) => {
+      router.push(`/invoices/${result.data.id}`);
+    },
+  });
+}
+
+function AOGEventPanel({ aog }: { aog: AogWO }) {
+  const [open, setOpen] = useState(false);
+  const [location, setLocation] = useState('');
+  const [mileage, setMileage] = useState('');
+  const [driveHours, setDriveHours] = useState('');
+  const [techCount, setTechCount] = useState('1');
+  const [saved, setSaved] = useState(false);
+
+  const { mutateAsync: updateEvent, isPending } = useUpdateAOGEvent(aog.id);
+  const { mutateAsync: generateInvoice, isPending: invoicePending } = useGenerateInterimInvoice();
+
+  const mileageTotal = parseFloat(mileage || '0') * 1.25;
+  const driveTotal = parseFloat(driveHours || '0') * parseInt(techCount || '1') * 70;
+  const calloutMin = 2 * AOG_RATE;
+
+  async function handleSaveEvent() {
+    await updateEvent({
+      location: location || undefined,
+      mileage: parseFloat(mileage) || undefined,
+      driveHours: parseFloat(driveHours) || undefined,
+      techCount: parseInt(techCount) || undefined,
+    });
+    setSaved(true);
+    setTimeout(() => { setSaved(false); setOpen(false); }, 1200);
+  }
+
+  return (
+    <>
+      <div className="flex gap-2">
+        <Link href={`/work-orders/${aog.id}`} className="flex-1">
+          <Button className="w-full h-8 text-xs" variant="outline">View Work Order</Button>
+        </Link>
+        <Button className="h-8 text-xs" variant="outline" onClick={() => setOpen(true)}>
+          <MapPin className="h-3.5 w-3.5 mr-1" />AOG Details
+        </Button>
+        <Button
+          className="h-8 text-xs"
+          variant="default"
+          onClick={() => generateInvoice({ workOrderId: aog.id, customerId: aog.customerId })}
+          disabled={invoicePending}
+        >
+          {invoicePending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <FileText className="h-3.5 w-3.5 mr-1" />
+          }
+          Interim Invoice
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>AOG Event Details — {aog.number}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />Location / Airport</Label>
+              <Input
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder="KPAO, Palo Alto Airport or address…"
+                className="h-9 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5"><Car className="h-3.5 w-3.5" />Mileage</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={mileage}
+                  onChange={e => setMileage(e.target.value)}
+                  placeholder="0"
+                  className="h-9 text-sm font-mono"
+                />
+                <p className="text-xs text-content-muted">@ $1.25/mi</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Drive Hours</Label>
+                <Input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={driveHours}
+                  onChange={e => setDriveHours(e.target.value)}
+                  placeholder="0"
+                  className="h-9 text-sm font-mono"
+                />
+                <p className="text-xs text-content-muted">@ $70/hr/tech</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />Techs</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={techCount}
+                  onChange={e => setTechCount(e.target.value)}
+                  placeholder="1"
+                  className="h-9 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Billing preview */}
+            <div className="rounded-lg bg-intent-danger/10 border border-intent-danger/20 p-3 text-xs space-y-1.5">
+              <p className="text-content-muted font-medium">Billing Preview</p>
+              <div className="flex justify-between">
+                <span className="text-content-muted">2hr callout min.</span>
+                <span className="font-mono text-content-primary">{formatCurrency(calloutMin)}</span>
+              </div>
+              {mileageTotal > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Mileage ({mileage} mi)</span>
+                  <span className="font-mono text-content-primary">{formatCurrency(mileageTotal)}</span>
+                </div>
+              )}
+              {driveTotal > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-content-muted">Drive time ({driveHours}h × {techCount})</span>
+                  <span className="font-mono text-content-primary">{formatCurrency(driveTotal)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-intent-danger/20 pt-1.5 font-medium">
+                <span className="text-content-secondary">Min. Billable</span>
+                <span className="font-mono text-intent-gold">{formatCurrency(calloutMin + mileageTotal + driveTotal)}</span>
+              </div>
+            </div>
+
+            {saved && (
+              <p className="text-xs text-intent-success flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />Saved successfully
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEvent} disabled={isPending} className="gap-2">
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save AOG Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function AogPage() {
   const { data, isLoading } = useWorkOrders({ type: 'AOG', status: 'IN_PROGRESS', limit: 20 });
-  const aogWos = data?.data ?? [];
+  const aogWos = (data?.data ?? []) as AogWO[];
 
   return (
     <div className="flex flex-col h-full">
@@ -91,7 +295,9 @@ export default function AogPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-content-muted">Activity</p>
-                  <p className="text-xs text-content-secondary">{aog._count.laborEntries} labor entr{aog._count.laborEntries === 1 ? 'y' : 'ies'} · {aog._count.squawks} squawk{aog._count.squawks !== 1 ? 's' : ''} · {aog._count.partRequests} part request{aog._count.partRequests !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-content-secondary">
+                    {aog._count.laborEntries} labor entr{aog._count.laborEntries === 1 ? 'y' : 'ies'} · {aog._count.squawks} squawk{aog._count.squawks !== 1 ? 's' : ''} · {aog._count.partRequests} part request{aog._count.partRequests !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
 
@@ -113,17 +319,12 @@ export default function AogPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Link href={`/work-orders/${aog.id}`} className="flex-1">
-                  <Button className="w-full h-8 text-xs" variant="outline">View Work Order</Button>
-                </Link>
-                <Button className="h-8 text-xs" variant="default">Generate Interim Invoice</Button>
-              </div>
+              <AOGEventPanel aog={aog} />
             </CardContent>
           </Card>
         ))}
 
-        {/* AOG Reference */}
+        {/* AOG Billing Reference */}
         <Card>
           <CardContent className="pt-4 pb-4">
             <p className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-3">AOG Billing Reference</p>
