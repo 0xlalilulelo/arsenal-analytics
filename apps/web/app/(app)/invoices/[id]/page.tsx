@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { useInvoiceDetail, useRecordPayment } from '@/hooks/useInvoices';
+import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
 import { ChevronLeft, CheckCircle2, Send, Loader2 } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -28,6 +28,7 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: inv, isLoading, isError } = useInvoiceDetail(id);
   const { mutateAsync: recordPayment, isPending: paymentPending } = useRecordPayment(id);
+  const { mutateAsync: updateInvoice, isPending: sendPending } = useUpdateInvoice(id);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CHECK');
@@ -87,8 +88,17 @@ export default function InvoiceDetailPage() {
                 <CheckCircle2 className="h-3.5 w-3.5" />Record Payment
               </Button>
             )}
-            <Button variant="outline" size="sm" className="gap-1 h-8 text-xs">
-              <Send className="h-3.5 w-3.5" />Send to Customer
+            <Button
+              variant={inv.status === 'SENT' ? 'ghost' : 'outline'}
+              size="sm"
+              className="gap-1 h-8 text-xs"
+              onClick={() => updateInvoice({ status: 'SENT' })}
+              disabled={sendPending || inv.status === 'PAID' || inv.status === 'SENT'}
+            >
+              {sendPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Send className="h-3.5 w-3.5" />}
+              {inv.status === 'SENT' ? 'Sent' : 'Mark as Sent'}
             </Button>
           </div>
         }

@@ -5,16 +5,48 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCustomers } from '@/hooks/useAnalytics';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Pencil, Loader2 } from 'lucide-react';
+
+const BILLING_TERMS = ['NET_15', 'NET_30', 'NET_45', 'COD', 'PREPAY'] as const;
+
+function useCreateCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; email?: string; phone?: string; billingTerms?: string }) => {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create customer');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  });
+}
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [billingTerms, setBillingTerms] = useState('NET_30');
 
   const { data, isLoading } = useCustomers(search || undefined);
   const customers = data?.data ?? [];
+  const { mutateAsync: createCustomer, isPending: creating } = useCreateCustomer();
+
+  async function handleAdd() {
+    if (!name.trim()) return;
+    await createCustomer({ name, email: email || undefined, phone: phone || undefined, billingTerms });
+    setName(''); setEmail(''); setPhone(''); setBillingTerms('NET_30');
+    setShowAdd(false);
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -69,7 +101,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="py-3 px-4">
                     {customer.billingTerms
-                      ? <Badge variant="default">{customer.billingTerms}</Badge>
+                      ? <Badge variant="default">{customer.billingTerms.replace('_', ' ')}</Badge>
                       : <span className="text-xs text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4 text-right font-mono text-xs">
@@ -83,7 +115,7 @@ export default function CustomersPage() {
                       : <span className="text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </td>
@@ -97,26 +129,46 @@ export default function CustomersPage() {
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Add Customer</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-2">
             <div>
-              <Label className="text-xs">Company / Individual Name</Label>
-              <Input className="mt-1.5 h-8 text-sm" />
+              <Label className="text-xs">Company / Individual Name *</Label>
+              <Input
+                className="mt-1.5 h-8 text-sm"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Acme Aviation LLC"
+                autoFocus
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Email</Label>
-                <Input type="email" className="mt-1.5 h-8 text-sm" />
+                <Input type="email" className="mt-1.5 h-8 text-sm" value={email} onChange={e => setEmail(e.target.value)} placeholder="billing@co.com" />
               </div>
               <div>
                 <Label className="text-xs">Phone</Label>
-                <Input type="tel" className="mt-1.5 h-8 text-sm" />
+                <Input type="tel" className="mt-1.5 h-8 text-sm" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(555) 000-0000" />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowAdd(false)}>Cancel</Button>
-              <Button size="sm" className="h-8 text-xs">Add Customer</Button>
+            <div>
+              <Label className="text-xs">Billing Terms</Label>
+              <Select value={billingTerms} onValueChange={setBillingTerms}>
+                <SelectTrigger className="mt-1.5 h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {BILLING_TERMS.map(t => (
+                    <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleAdd} disabled={!name.trim() || creating}>
+              {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Add Customer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

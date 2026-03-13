@@ -42,6 +42,25 @@ export function useInvoiceDetail(id: string) {
   });
 }
 
+export function useUpdateInvoice(invoiceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { status?: string; notes?: string }) => {
+      const res = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update invoice');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+}
+
 export function useRecordPayment(invoiceId: string) {
   const queryClient = useQueryClient();
   return useMutation({

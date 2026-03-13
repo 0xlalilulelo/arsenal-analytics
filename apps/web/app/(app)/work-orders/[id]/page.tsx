@@ -34,12 +34,51 @@ export default function WorkOrderDetailPage() {
   const [squawkPanelOpen, setSquawkPanelOpen] = useState(false);
   const [logTimeOpen, setLogTimeOpen] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [requestPartOpen, setRequestPartOpen] = useState(false);
+  const [milestoneOpen, setMilestoneOpen] = useState(false);
+
+  // Request Part form state
+  const [rpPartNumber, setRpPartNumber] = useState('');
+  const [rpDescription, setRpDescription] = useState('');
+  const [rpQty, setRpQty] = useState('1');
+  const [rpUnitCost, setRpUnitCost] = useState('');
+
+  // Add Milestone form state
+  const [msName, setMsName] = useState('');
+  const [msPct, setMsPct] = useState('');
+
   const { id: workOrderId } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
 
   const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
   const wo = data?.data;
+
+  const { mutateAsync: requestPart, isPending: requestingPart } = useMutation({
+    mutationFn: async (data: { partNumber: string; description: string; qty: number; unitCost?: number }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/parts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to request part');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: addMilestone, isPending: addingMilestone } = useMutation({
+    mutationFn: async (data: { name: string; pct: number }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add milestone');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
 
   const { mutateAsync: generateInvoice, isPending: invoicePending } = useMutation({
     mutationFn: async () => {
@@ -330,7 +369,7 @@ export default function WorkOrderDetailPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-content-secondary">{wo.partRequests.length} part request{wo.partRequests.length !== 1 ? 's' : ''}</p>
-                  <Button size="sm" className="h-8 text-xs">Request Part</Button>
+                  <Button size="sm" className="h-8 text-xs" onClick={() => setRequestPartOpen(true)}>Request Part</Button>
                 </div>
                 {wo.partRequests.length === 0 ? (
                   <div className="rounded-lg border border-surface-hover p-8 text-center text-sm text-content-muted">
@@ -401,22 +440,25 @@ export default function WorkOrderDetailPage() {
                     {wo.milestones.length === 0 ? (
                       <>
                         <p className="text-sm text-content-muted">No milestones configured.</p>
-                        <Button variant="outline" size="sm" className="mt-3 h-8 text-xs">Add Milestone</Button>
+                        <Button variant="outline" size="sm" className="mt-3 h-8 text-xs" onClick={() => setMilestoneOpen(true)}>Add Milestone</Button>
                       </>
                     ) : (
                       <div className="space-y-2">
-                        {wo.milestones.map(m => (
-                          <div key={m.id} className="flex items-center justify-between text-sm">
-                            <div>
-                              <p className="text-content-primary">{m.title}</p>
-                              <p className="text-xs text-content-muted">{m.pct}%</p>
+                        {wo.milestones.map(m => {
+                          const milestoneAmt = wo.estimatedTotal ? (wo.estimatedTotal * (m.pct / 100)) : null;
+                          return (
+                            <div key={m.id} className="flex items-center justify-between text-sm">
+                              <div>
+                                <p className="text-content-primary">{m.name}</p>
+                                <p className="text-xs text-content-muted">{m.pct}%</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-mono text-content-primary">{milestoneAmt ? formatCurrency(milestoneAmt) : '—'}</p>
+                                {m.invoiceId && <Badge variant="invoiced" className="text-xs">Invoiced</Badge>}
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="font-mono text-content-primary">{m.amount ? formatCurrency(m.amount) : '—'}</p>
-                              {m.invoiced && <Badge variant="invoiced" className="text-xs">Invoiced</Badge>}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -493,6 +535,137 @@ export default function WorkOrderDetailPage() {
         onClose={() => setLogTimeOpen(false)}
         workOrderId={workOrderId}
       />
+
+      {/* Request Part Dialog */}
+      <Dialog open={requestPartOpen} onOpenChange={setRequestPartOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Request Part</DialogTitle>
+            <DialogDescription>Add a part request to {wo?.number}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Part Number *</Label>
+              <Input
+                value={rpPartNumber}
+                onChange={e => setRpPartNumber(e.target.value)}
+                placeholder="ABC-12345"
+                className="h-8 text-sm font-mono"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description *</Label>
+              <Input
+                value={rpDescription}
+                onChange={e => setRpDescription(e.target.value)}
+                placeholder="Fuel pump, gasket set…"
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Qty</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={rpQty}
+                  onChange={e => setRpQty(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Unit Cost ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="optional"
+                  value={rpUnitCost}
+                  onChange={e => setRpUnitCost(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRequestPartOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!rpPartNumber.trim() || !rpDescription.trim() || requestingPart}
+              onClick={async () => {
+                await requestPart({
+                  partNumber: rpPartNumber.trim(),
+                  description: rpDescription.trim(),
+                  qty: parseInt(rpQty) || 1,
+                  unitCost: rpUnitCost ? parseFloat(rpUnitCost) : undefined,
+                });
+                setRpPartNumber(''); setRpDescription(''); setRpQty('1'); setRpUnitCost('');
+                setRequestPartOpen(false);
+              }}
+              className="gap-2"
+            >
+              {requestingPart && <Loader2 className="h-4 w-4 animate-spin" />}
+              Request Part
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Milestone Dialog */}
+      <Dialog open={milestoneOpen} onOpenChange={setMilestoneOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Add Billing Milestone</DialogTitle>
+            <DialogDescription>Progressive billing checkpoint as % of estimated total</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Milestone Name *</Label>
+              <Input
+                value={msName}
+                onChange={e => setMsName(e.target.value)}
+                placeholder="Phase 1 Complete, Teardown…"
+                className="h-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">% of Est. Total *</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={msPct}
+                  onChange={e => setMsPct(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+                <span className="text-sm text-content-muted">%</span>
+              </div>
+              {msPct && wo?.estimatedTotal && (
+                <p className="text-xs text-content-muted">
+                  = <span className="font-mono text-content-primary">{formatCurrency(wo.estimatedTotal * (parseFloat(msPct) / 100))}</span>
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMilestoneOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!msName.trim() || !msPct || parseFloat(msPct) <= 0 || addingMilestone}
+              onClick={async () => {
+                await addMilestone({ name: msName.trim(), pct: parseFloat(msPct) });
+                setMsName(''); setMsPct('');
+                setMilestoneOpen(false);
+              }}
+              className="gap-2"
+            >
+              {addingMilestone && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add Milestone
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Invoice Dialog */}
       <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
