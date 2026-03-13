@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Topbar } from '@/components/layout/Topbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { PartsTable } from '@/components/parts/PartsTable';
-import { PurchaseOrdersTable } from '@/components/parts/PurchaseOrdersTable';
+import { PurchaseOrdersTable, PurchaseOrderRow } from '@/components/parts/PurchaseOrdersTable';
 import { useParts } from '@/hooks/useAnalytics';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Package, Loader2 } from 'lucide-react';
@@ -41,6 +42,7 @@ function useCreatePO() {
 }
 
 export default function PartsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [newPOOpen, setNewPOOpen] = useState(false);
   const [poVendor, setPOVendor] = useState('');
@@ -128,7 +130,10 @@ export default function PartsPage() {
             {posLoading ? (
               <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-content-muted" /></div>
             ) : (
-              <PurchaseOrdersTable purchaseOrders={purchaseOrders} />
+              <PurchaseOrdersTable
+                purchaseOrders={purchaseOrders}
+                onView={(po: PurchaseOrderRow) => router.push(`/parts/po/${po.id}`)}
+              />
             )}
           </TabsContent>
         </Tabs>

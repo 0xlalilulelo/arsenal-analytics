@@ -60,43 +60,43 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="WIP Value"
-            value="—"
-            subvalue="Estimated at completion"
+            value={kpi ? formatCurrency(kpi.wipValue) : '—'}
+            subvalue="Open WO estimated totals"
             icon={DollarSign}
             intent="gold"
             tooltip="Total unbilled value of all open work orders"
           />
           <KpiCard
             title="Labor Utilization"
-            value="—"
+            value={kpi?.laborUtilizationPct != null ? `${kpi.laborUtilizationPct.toFixed(1)}%` : '—'}
             subvalue="Target: 70–85%"
             icon={Clock}
-            intent="success"
-            tooltip="Billable hours as % of total available hours"
+            intent={kpi?.laborUtilizationPct != null ? (kpi.laborUtilizationPct >= 70 ? 'success' : 'warning') : 'success'}
+            tooltip="Billable hours as % of total available hours this month"
           />
           <KpiCard
             title="Parts Margin"
-            value="—"
+            value={kpi?.partsMarginPct != null ? `${kpi.partsMarginPct.toFixed(1)}%` : '—'}
             subvalue="Target: 35–50%"
             icon={Package}
-            intent="primary"
-            tooltip="Gross margin on parts sales"
+            intent={kpi?.partsMarginPct != null ? (kpi.partsMarginPct >= 35 ? 'primary' : 'warning') : 'primary'}
+            tooltip="Gross margin on parts sold this month"
           />
           <KpiCard
             title="Avg Invoice Age"
-            value="—"
-            subvalue="Net 30 terms"
+            value={kpi?.avgInvoiceAgeDays != null ? `${kpi.avgInvoiceAgeDays}d` : '—'}
+            subvalue="Days outstanding (unpaid)"
             icon={BarChart2}
-            intent="muted"
+            intent={kpi?.avgInvoiceAgeDays != null ? (kpi.avgInvoiceAgeDays > 45 ? 'warning' : 'muted') : 'muted'}
             tooltip="Average days since invoice issued for unpaid invoices"
           />
           <KpiCard
             title="Technicians On Jobs"
-            value="—"
-            subvalue="Active technicians"
+            value={kpi ? String(kpi.techsOnJobsCount) : '—'}
+            subvalue="Logged labor today"
             icon={Wrench}
             intent="primary"
-            tooltip="Technicians currently clocked in on jobs"
+            tooltip="Unique technicians with labor entries today"
           />
         </div>
 

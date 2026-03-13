@@ -21,6 +21,7 @@ const navItems = [
   { href: '/quotes',     label: 'Quotes',        icon: Calculator },
   { href: '/work-orders', label: 'Work Orders',  icon: ClipboardList },
   { href: '/aog',        label: 'AOG',           icon: AlertTriangle,  highlight: true },
+  { href: '/aircraft',   label: 'Aircraft',      icon: Plane },
   { href: '/parts',      label: 'Parts & POs',   icon: Package },
   { href: '/invoices',   label: 'Invoices',      icon: FileText },
   { href: '/compliance', label: 'Compliance',    icon: ShieldCheck },
