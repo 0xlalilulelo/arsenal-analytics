@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCustomers } from '@/hooks/useAnalytics';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Loader2 } from 'lucide-react';
+import { Plus, Search, Pencil, ChevronRight, Loader2 } from 'lucide-react';
 
 const BILLING_TERMS = ['NET_15', 'NET_30', 'NET_45', 'COD', 'PREPAY'] as const;
 
@@ -150,7 +151,9 @@ export default function CustomersPage() {
               {customers.map((customer: CustomerRow) => (
                 <tr key={customer.id} className="hover:bg-surface-hover/30">
                   <td className="py-3 px-4 font-mono text-xs text-content-muted">{customer.accountNumber ?? '—'}</td>
-                  <td className="py-3 px-4 font-medium text-content-primary">{customer.name}</td>
+                  <td className="py-3 px-4 font-medium text-content-primary">
+                    <Link href={`/settings/customers/${customer.id}`} className="hover:text-intent-primary hover:underline">{customer.name}</Link>
+                  </td>
                   <td className="py-3 px-4">
                     {customer.email && <p className="text-xs text-content-secondary">{customer.email}</p>}
                     {customer.phone && <p className="text-xs text-content-muted">{customer.phone}</p>}
@@ -171,9 +174,16 @@ export default function CustomersPage() {
                       : <span className="text-content-muted">—</span>}
                   </td>
                   <td className="py-3 px-4">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(customer)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(customer)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Link href={`/settings/customers/${customer.id}`}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

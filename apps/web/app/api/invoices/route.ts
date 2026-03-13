@@ -38,10 +38,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data: invoices, total, page, limit });
 }
 
+const SHOP_SUPPLIES_PCT = 0.035;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { workOrderId, customerId, taxRate = 0 } = body;
+    const { workOrderId, customerId, taxRate = 0, includeShopSupplies = false } = body;
 
     const orgId = await resolveOrgId();
     if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
 
     let lineItemsData: { category: string; description: string; qty: number; unitPrice: number; total: number; taxable: boolean }[] = [];
     let subtotal = 0;
+    let laborTotal = 0;
 
     if (workOrderId) {
       const entries = await prisma.laborEntry.findMany({
@@ -67,6 +70,7 @@ export async function POST(request: NextRequest) {
         const t = e.hours * e.rateUsed;
         lineItemsData.push({ category: 'LABOR', description: `Labor — ${e.technician.name}`, qty: e.hours, unitPrice: e.rateUsed, total: t, taxable: false });
         subtotal += t;
+        laborTotal += t;
       }
 
       const partReqs = await prisma.partRequest.findMany({
@@ -76,6 +80,12 @@ export async function POST(request: NextRequest) {
         const t = p.qty * (p.unitBillPrice ?? 0);
         lineItemsData.push({ category: 'PARTS', description: `${p.partNumber} — ${p.description}`, qty: p.qty, unitPrice: p.unitBillPrice ?? 0, total: t, taxable: true });
         subtotal += t;
+      }
+
+      if (includeShopSupplies && laborTotal > 0) {
+        const shopAmt = Math.round(laborTotal * SHOP_SUPPLIES_PCT * 100) / 100;
+        lineItemsData.push({ category: 'SHOP_SUPPLIES', description: 'Shop Supplies (3.5% of labor)', qty: 1, unitPrice: shopAmt, total: shopAmt, taxable: true });
+        subtotal += shopAmt;
       }
     }
 

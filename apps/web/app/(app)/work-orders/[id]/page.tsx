@@ -36,6 +36,8 @@ export default function WorkOrderDetailPage() {
   const [squawkPanelOpen, setSquawkPanelOpen] = useState(false);
   const [logTimeOpen, setLogTimeOpen] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [includeShopSupplies, setIncludeShopSupplies] = useState(true);
+  const [invTaxRate, setInvTaxRate] = useState('0');
   const [requestPartOpen, setRequestPartOpen] = useState(false);
   const [milestoneOpen, setMilestoneOpen] = useState(false);
   const [complianceOpen, setComplianceOpen] = useState(false);
@@ -107,7 +109,12 @@ export default function WorkOrderDetailPage() {
       const res = await fetch('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workOrderId, customerId: wo!.customerId }),
+        body: JSON.stringify({
+          workOrderId,
+          customerId: wo!.customerId,
+          includeShopSupplies,
+          taxRate: parseFloat(invTaxRate || '0') / 100,
+        }),
       });
       if (!res.ok) throw new Error('Failed to generate invoice');
       return res.json();
@@ -759,37 +766,53 @@ export default function WorkOrderDetailPage() {
           <DialogHeader>
             <DialogTitle>Generate Invoice</DialogTitle>
             <DialogDescription>
-              Review the billing summary for <span className="font-mono font-semibold">{wo?.number}</span> before generating.
+              Review the billing for <span className="font-mono font-semibold">{wo?.number}</span> before generating.
             </DialogDescription>
           </DialogHeader>
-          {wo && (
-            <div className="space-y-2 text-sm py-1">
-              <div className="flex justify-between">
-                <span className="text-content-muted">Labor ({wo.laborEntries.filter(e => e.billable).length} entries)</span>
-                <span className="font-mono">{formatCurrency(totalLaborBilled)}</span>
+          {wo && (() => {
+            const partsTotal = wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0);
+            const shopAmt = includeShopSupplies ? Math.round(totalLaborBilled * 0.035 * 100) / 100 : 0;
+            const taxRateVal = parseFloat(invTaxRate || '0') / 100;
+            const taxable = partsTotal + shopAmt;
+            const taxAmt = Math.round(taxable * taxRateVal * 100) / 100;
+            const invTotal = totalLaborBilled + partsTotal + shopAmt + taxAmt;
+            return (
+              <div className="space-y-3 py-1">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-content-muted">Labor ({wo.laborEntries.filter(e => e.billable).length} billable entries)</span>
+                    <span className="font-mono">{formatCurrency(totalLaborBilled)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-content-muted">Parts ({wo.partRequests.filter(p => ['RECEIVED','INSTALLED'].includes(p.status)).length} received)</span>
+                    <span className="font-mono">{formatCurrency(partsTotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <label className="flex items-center gap-1.5 text-content-muted cursor-pointer">
+                      <input type="checkbox" checked={includeShopSupplies} onChange={e => setIncludeShopSupplies(e.target.checked)} className="rounded" />
+                      Shop Supplies (3.5% of labor)
+                    </label>
+                    <span className={`font-mono ${includeShopSupplies ? '' : 'line-through text-content-muted'}`}>{formatCurrency(shopAmt || totalLaborBilled * 0.035)}</span>
+                  </div>
+                  {taxRateVal > 0 && (
+                    <div className="flex justify-between text-content-muted">
+                      <span>Tax ({invTaxRate}%)</span>
+                      <span className="font-mono">{formatCurrency(taxAmt)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-surface-hover pt-2">
+                    <span className="text-content-primary">Invoice Total</span>
+                    <span className="font-mono text-intent-gold">{formatCurrency(invTotal)}</span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-content-muted">Tax Rate (%)</Label>
+                  <Input type="number" step="0.1" min="0" max="20" className="mt-1.5 h-8 text-sm font-mono w-28" value={invTaxRate} onChange={e => setInvTaxRate(e.target.value)} placeholder="0" />
+                </div>
+                <p className="text-xs text-content-muted">A DRAFT invoice will be created. Review before sending.</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-content-muted">Parts (received)</span>
-                <span className="font-mono">{formatCurrency(
-                  wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0)
-                )}</span>
-              </div>
-              <div className="flex justify-between text-content-muted">
-                <span>Shop Supplies (3.5%)</span>
-                <span className="font-mono">{formatCurrency(shopSupplies)}</span>
-              </div>
-              <div className="flex justify-between font-semibold border-t border-surface-hover pt-2">
-                <span className="text-content-primary">Invoice Total</span>
-                <span className="font-mono text-intent-gold">{formatCurrency(
-                  totalLaborBilled + shopSupplies +
-                  wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0)
-                )}</span>
-              </div>
-              <p className="text-xs text-content-muted pt-1">
-                A DRAFT invoice will be created. You can review and finalize before sending to the customer.
-              </p>
-            </div>
-          )}
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)} disabled={invoicePending}>Cancel</Button>
             <Button onClick={async () => { setInvoiceDialogOpen(false); await generateInvoice(); }} disabled={invoicePending} className="gap-2">
