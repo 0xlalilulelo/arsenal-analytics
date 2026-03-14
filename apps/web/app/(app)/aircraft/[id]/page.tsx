@@ -12,7 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
   ChevronLeft, Plane, Wrench, CheckCircle2, Clock,
-  AlertTriangle, Loader2, Edit2,
+  AlertTriangle, Loader2, Edit2, DollarSign,
 } from 'lucide-react';
 
 const STATUS_VARIANT: Record<string, any> = {
@@ -34,8 +34,14 @@ type Aircraft = {
   workOrders: {
     id: string; number: string; status: string; type: string;
     description: string; estimatedTotal: number | null; createdAt: string; closedAt: string | null;
-    complianceItems: { id: string; type: string; referenceId: string; completedAt: string | null }[];
+    complianceItems: { id: string; type: string; referenceId: string; description: string; completedAt: string | null }[];
   }[];
+  stats: {
+    lifetimeBilled: number;
+    lifetimePaid: number;
+    lifetimeLaborHours: number;
+    woCount: number;
+  } | null;
 };
 
 function useAircraftDetail(id: string) {
@@ -124,7 +130,7 @@ export default function AircraftDetailPage({ params }: { params: Promise<{ id: s
           </Link>
         </div>
 
-        {/* Airframe Info */}
+        {/* Hours + Compliance KPIs */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Card>
             <CardContent className="pt-4 pb-4">
@@ -159,6 +165,52 @@ export default function AircraftDetailPage({ params }: { params: Promise<{ id: s
             </CardContent>
           </Card>
         </div>
+
+        {/* Maintenance Spend KPIs */}
+        {aircraft.stats && (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-1.5 text-xs text-content-muted mb-1">
+                  <DollarSign className="h-3.5 w-3.5" />Lifetime Billed
+                </div>
+                <p className="font-mono text-xl font-bold text-intent-gold">
+                  {formatCurrency(aircraft.stats.lifetimeBilled)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-1.5 text-xs text-content-muted mb-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />Lifetime Paid
+                </div>
+                <p className="font-mono text-xl font-bold text-intent-success">
+                  {formatCurrency(aircraft.stats.lifetimePaid)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-1.5 text-xs text-content-muted mb-1">
+                  <Clock className="h-3.5 w-3.5" />Labor Hours
+                </div>
+                <p className="font-mono text-xl font-bold text-content-primary">
+                  {aircraft.stats.lifetimeLaborHours.toLocaleString()}h
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-1.5 text-xs text-content-muted mb-1">
+                  <Wrench className="h-3.5 w-3.5" />Work Orders
+                </div>
+                <p className="font-mono text-xl font-bold text-content-primary">
+                  {aircraft.stats.woCount}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Aircraft Details */}
         <Card>
@@ -273,6 +325,7 @@ export default function AircraftDetailPage({ params }: { params: Promise<{ id: s
                   <tr className="border-b border-surface-hover">
                     <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Type</th>
                     <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Reference</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Description</th>
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Status</th>
                   </tr>
                 </thead>
@@ -283,6 +336,7 @@ export default function AircraftDetailPage({ params }: { params: Promise<{ id: s
                         <Badge variant={c.type === 'AD' ? 'aog' : 'inspection'}>{c.type}</Badge>
                       </td>
                       <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{c.referenceId}</td>
+                      <td className="py-2.5 px-4 text-xs text-content-muted max-w-xs truncate">{(c as any).description ?? '—'}</td>
                       <td className="py-2.5 px-4 text-right">
                         {c.completedAt ? (
                           <span className="flex items-center justify-end gap-1 text-xs text-intent-success">
