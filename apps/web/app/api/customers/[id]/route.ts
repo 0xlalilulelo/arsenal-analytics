@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         take: 15,
         select: {
           id: true, number: true, status: true, type: true,
-          description: true, estimatedTotal: true, createdAt: true, closedAt: true,
+          notes: true, estimatedTotal: true, createdAt: true, closedAt: true,
           aircraft: { select: { nNumber: true } },
         },
       },

@@ -60,7 +60,7 @@ export async function POST(
     if (unitCost != null) {
       const orgRules = await loadOrgMarkupRules(wo.orgId);
       markupPct = markupPctOverride ?? getMarkupPct(unitCost, orgRules);
-      unitBillPrice = getBillPrice(unitCost, markupPct, orgRules);
+      unitBillPrice = getBillPrice(unitCost, markupPct ?? undefined, orgRules);
     }
 
     const partRequest = await prisma.partRequest.create({
@@ -110,7 +110,7 @@ export async function PATCH(
     if (unitCost != null && wo) {
       const orgRules = await loadOrgMarkupRules(wo.orgId);
       markupPct = markupPctOverride ?? getMarkupPct(unitCost, orgRules);
-      unitBillPrice = getBillPrice(unitCost, markupPct, orgRules);
+      unitBillPrice = getBillPrice(unitCost, markupPct ?? undefined, orgRules);
     }
 
     const updated = await prisma.partRequest.update({

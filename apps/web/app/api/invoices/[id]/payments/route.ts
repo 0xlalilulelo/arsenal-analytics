@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
     const alreadyPaid = invoice.payments.reduce((s, p) => s + p.amount, 0);
-    const remaining = invoice.totalAmount - alreadyPaid;
+    const remaining = invoice.total - alreadyPaid;
     if (amount > remaining + 0.01) {
       return NextResponse.json({ error: `Amount exceeds balance due (${remaining.toFixed(2)})` }, { status: 422 });
     }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Auto-mark invoice as PAID if fully paid
     const newTotal = alreadyPaid + amount;
-    if (newTotal >= invoice.totalAmount - 0.01) {
+    if (newTotal >= invoice.total - 0.01) {
       await prisma.invoice.update({
         where: { id: invoiceId },
         data: { status: 'PAID', paidAt: new Date() },

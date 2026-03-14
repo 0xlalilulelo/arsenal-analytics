@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
 
   const invite = await prisma.userInvite.upsert({
     where: { orgId_email: { orgId: user.orgId, email } },
-    update: { role: role as any, token, expiresAt, invitedBy: user.id ?? '', acceptedAt: null },
-    create: { orgId: user.orgId, email, role: role as any, token, expiresAt, invitedBy: user.id ?? '' },
+    update: { role: role as any, token, expiresAt, invitedById: user.id ?? null, acceptedAt: null },
+    create: { orgId: user.orgId, email, role: role as any, token, expiresAt, invitedById: user.id ?? null },
   });
 
   // Send invite email (non-blocking)

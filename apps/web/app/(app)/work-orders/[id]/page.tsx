@@ -125,7 +125,7 @@ export default function WorkOrderDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           workOrderId,
-          customerId: wo!.customerId,
+          customerId: wo!.customer.id,
           includeShopSupplies,
           taxRate: parseFloat(invTaxRate || '0') / 100,
         }),
@@ -512,12 +512,12 @@ export default function WorkOrderDetailPage() {
                           return (
                             <div key={m.id} className="flex items-center justify-between text-sm">
                               <div>
-                                <p className="text-content-primary">{m.name}</p>
+                                <p className="text-content-primary">{m.title}</p>
                                 <p className="text-xs text-content-muted">{m.pct}%</p>
                               </div>
                               <div className="text-right">
                                 <p className="font-mono text-content-primary">{milestoneAmt ? formatCurrency(milestoneAmt) : '—'}</p>
-                                {m.invoiceId && <Badge variant="invoiced" className="text-xs">Invoiced</Badge>}
+                                {m.invoiced && <Badge variant="invoiced" className="text-xs">Invoiced</Badge>}
                               </div>
                             </div>
                           );

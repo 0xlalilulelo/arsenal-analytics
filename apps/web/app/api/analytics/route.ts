@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest) {
     }),
     // Parts margin: received parts this month
     prisma.partRequest.findMany({
-      where: { workOrder: { orgId }, status: { in: ['RECEIVED', 'INSTALLED'] }, updatedAt: { gte: startOfMonth } },
+      where: { workOrder: { orgId }, status: { in: ['RECEIVED', 'INSTALLED'] }, createdAt: { gte: startOfMonth } },
       select: { unitCost: true, unitBillPrice: true, qty: true },
     }),
     // Techs on jobs today

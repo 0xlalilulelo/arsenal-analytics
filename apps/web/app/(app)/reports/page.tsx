@@ -207,8 +207,8 @@ export default function ReportsPage() {
               <p className="text-xl font-bold font-mono text-content-primary">
                 {kpi ? kpi.activeWoCount : '—'}
               </p>
-              {kpi?.aogCount > 0 && (
-                <p className="text-xs text-intent-danger mt-0.5">{kpi.aogCount} AOG active</p>
+              {(kpi?.aogCount ?? 0) > 0 && (
+                <p className="text-xs text-intent-danger mt-0.5">{kpi?.aogCount} AOG active</p>
               )}
             </CardContent>
           </Card>

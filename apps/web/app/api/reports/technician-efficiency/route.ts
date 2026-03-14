@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const technicians = await prisma.technician.findMany({
     where: { orgId },
     select: {
-      id: true, name: true, certifications: true, licenseNumber: true,
+      id: true, name: true, certifications: true,
       laborEntries: {
         where: {
           billable: true,
@@ -75,7 +75,6 @@ export async function GET(request: NextRequest) {
       id: tech.id,
       name: tech.name,
       certifications: tech.certifications,
-      licenseNumber: tech.licenseNumber,
       billedHours,
       availableHours,
       revenueGenerated,

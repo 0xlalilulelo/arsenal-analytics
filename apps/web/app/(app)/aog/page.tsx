@@ -219,7 +219,7 @@ function AOGEventPanel({ aog }: { aog: AogWO }) {
 
 export default function AogPage() {
   const { data, isLoading } = useWorkOrders({ type: 'AOG', status: 'IN_PROGRESS', limit: 20 });
-  const aogWos = (data?.data ?? []) as AogWO[];
+  const aogWos = (data?.data ?? []) as unknown as AogWO[];
 
   return (
     <div className="flex flex-col h-full">

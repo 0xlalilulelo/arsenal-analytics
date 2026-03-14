@@ -9,6 +9,12 @@ export type KpiData = {
   activeWoCount: number;
   aogCount: number;
   monthlyRevenue: { month: string; revenue: number }[];
+  wipValue: number;
+  laborUtilizationPct: number | null;
+  partsMarginPct: number | null;
+  avgInvoiceAgeDays: number | null;
+  techsOnJobsCount: number;
+  woTypeBreakdown: Record<string, number>;
 };
 
 export function useKpiMetrics() {

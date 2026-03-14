@@ -58,7 +58,7 @@ export async function GET(_req: NextRequest) {
       accountNumber: inv.customer?.accountNumber ?? null,
       issueDate: inv.issueDate,
       dueDate: inv.dueDate,
-      total: inv.totalAmount,
+      total: inv.total,
       balance: inv.balance,
       bucket,
       daysOutstanding: days,

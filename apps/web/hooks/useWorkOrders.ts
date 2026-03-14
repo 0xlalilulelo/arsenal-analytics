@@ -5,6 +5,7 @@ export type WorkOrderSummary = {
   number: string;
   type: string;
   status: string;
+  customerId: string;
   customer: { name: string; accountNumber: string | null };
   aircraft: { nNumber: string; make: string; model: string };
   billingModel: string;
@@ -32,9 +33,9 @@ export type WorkOrderDetail = {
   laborRate: { id: string; rate: number; multiplier: number };
   lineItems: Array<{ id: string; taskNumber: string; description: string; referenceDoc: string | null; estHours: number; laborRate: number; status: string; sortOrder: number }>;
   laborEntries: Array<{ id: string; date: string; hours: number; rateUsed: number; billable: boolean; description: string | null; technician: { name: string } }>;
-  squawks: Array<{ id: string; description: string; isAirworthiness: boolean; status: string; estLaborHours: number | null; estPartsTotal: number | null; estTotal: number | null; approvedBy: string | null; approvedAt: string | null }>;
+  squawks: Array<{ id: string; description: string; isAirworthiness: boolean; status: 'PENDING_APPROVAL' | 'APPROVED' | 'DECLINED' | 'DEFERRED'; estLaborHours: number | null; estPartsTotal: number | null; estTotal: number | null; approvedBy: string | null; approvedAt: string | null }>;
   complianceItems: Array<{ id: string; type: string; referenceId: string; description: string; completedAt: string | null; form337Required: boolean }>;
-  partRequests: Array<{ id: string; partNumber: string; description: string; qty: number; status: string; unitCost: number | null }>;
+  partRequests: Array<{ id: string; partNumber: string; description: string; qty: number; status: string; unitCost: number | null; unitBillPrice: number | null }>;
   milestones: Array<{ id: string; title: string; pct: number; amount: number | null; invoiced: boolean; sortOrder: number }>;
   invoices: Array<{ id: string; invoiceNumber: string; total: number; status: string }>;
 };
