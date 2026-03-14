@@ -14,7 +14,7 @@ import { useQuoteDetail, useUpdateQuote, useSendQuote, useConvertQuote } from '@
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
   ChevronLeft, Send, CheckCircle2, XCircle, ArrowRight, Loader2,
-  Plane, Clock, FileText, DollarSign, AlertTriangle, Copy, ExternalLink,
+  Plane, Clock, FileText, DollarSign, AlertTriangle, Copy, ExternalLink, Printer,
 } from 'lucide-react';
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -135,6 +135,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
               </Button>
             </Link>
 
+            <Button size="sm" variant="ghost" className="h-8 text-xs gap-1" onClick={() => window.open(`/print/quotes/${id}`, '_blank')}>
+              <Printer className="h-3.5 w-3.5" />Print
+            </Button>
             {canSend && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setSendOpen(true)} disabled={sendPending}>
                 <Send className="h-3.5 w-3.5" />Send to Customer

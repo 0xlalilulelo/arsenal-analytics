@@ -15,6 +15,7 @@ export async function GET(_req: NextRequest) {
   const [
     revenueNow, revenuePrev, activeWos, aogWos, arInvoices,
     openWoValues, laborThisMonth, receivedPartsThisMonth, techsToday,
+    woByType,
   ] = await Promise.all([
     prisma.invoice.aggregate({ _sum: { total: true }, where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'PAID'] }, issueDate: { gte: startOfMonth } } }),
     prisma.invoice.aggregate({ _sum: { total: true }, where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'PAID'] }, issueDate: { gte: startOfLastMonth, lte: endOfLastMonth } } }),
@@ -38,6 +39,12 @@ export async function GET(_req: NextRequest) {
       where: { workOrder: { orgId }, createdAt: { gte: startOfToday } },
       select: { technicianId: true },
       distinct: ['technicianId'],
+    }),
+    // Active WO breakdown by type
+    prisma.workOrder.groupBy({
+      by: ['type'],
+      where: { orgId, status: { in: ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL'] } },
+      _count: { _all: true },
     }),
   ]);
 
@@ -76,20 +83,25 @@ export async function GET(_req: NextRequest) {
   const avgInvoiceAgeDays = agingCount > 0 ? Math.round(agingDaysSum / agingCount) : null;
   const techsOnJobsCount = techsToday.length;
 
-  // 12-month revenue sparkline
-  const monthlyRevenue: { month: string; revenue: number }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-    const r = await prisma.invoice.aggregate({
+  // 12-month revenue sparkline — parallel queries
+  const monthPromises = Array.from({ length: 12 }, (_, i) => {
+    const idx = 11 - i;
+    const start = new Date(now.getFullYear(), now.getMonth() - idx, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - idx + 1, 0);
+    return prisma.invoice.aggregate({
       _sum: { total: true },
       where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'PAID'] }, issueDate: { gte: start, lte: end } },
-    });
-    monthlyRevenue.push({ month: start.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), revenue: Number(r._sum.total ?? 0) });
-  }
+    }).then(r => ({
+      month: start.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      revenue: Number(r._sum.total ?? 0),
+    }));
+  });
+  const monthlyRevenue = await Promise.all(monthPromises);
 
   const rev = Number(revenueNow._sum.total ?? 0);
   const revPrev = Number(revenuePrev._sum.total ?? 0);
+
+  const woTypeBreakdown = Object.fromEntries(woByType.map(g => [g.type, g._count._all]));
 
   return NextResponse.json({ data: {
     revenueThisMonth: rev,
@@ -105,5 +117,6 @@ export async function GET(_req: NextRequest) {
     partsMarginPct,
     avgInvoiceAgeDays,
     techsOnJobsCount,
+    woTypeBreakdown,
   }});
 }

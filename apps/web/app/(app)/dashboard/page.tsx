@@ -121,9 +121,9 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* ─── AR Aging ─── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
+        {/* ─── AR Aging + WO Breakdown + Actions ─── */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-1">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-content-secondary">AR Aging</CardTitle>
             </CardHeader>
@@ -150,7 +150,39 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="lg:col-span-1">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-content-secondary">Open WOs by Type</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {kpi?.woTypeBreakdown ? (
+                Object.entries({
+                  SCHEDULED: { label: 'Scheduled', color: 'bg-intent-primary' },
+                  INSPECTION: { label: 'Inspection', color: 'bg-intent-success' },
+                  UNSCHEDULED: { label: 'Unscheduled', color: 'bg-intent-warning' },
+                  AOG: { label: 'AOG', color: 'bg-intent-danger' },
+                } as const).map(([type, meta]) => {
+                  const count = (kpi.woTypeBreakdown as Record<string, number>)[type] ?? 0;
+                  const total = kpi.activeWoCount || 1;
+                  return (
+                    <div key={type} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-content-secondary">{meta.label}</span>
+                        <span className={`font-mono font-semibold ${count === 0 ? 'text-content-muted' : 'text-content-primary'}`}>{count}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-surface-hover overflow-hidden">
+                        <div className={`h-full rounded-full ${meta.color}`} style={{ width: `${count > 0 ? (count / total) * 100 : 0}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-content-muted py-4 text-center">Loading…</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-1">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-content-secondary">Pending Actions</CardTitle>
             </CardHeader>
@@ -174,8 +206,22 @@ export default function DashboardPage() {
                     </div>
                   </li>
                 )}
+                {kpi && kpi.laborUtilizationPct != null && kpi.laborUtilizationPct < 50 && (
+                  <li className="flex gap-3 items-start">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-intent-warning" />
+                    <div>
+                      <p className="text-xs font-medium text-content-primary">Labor utilization below 50%</p>
+                      <p className="text-xs text-content-muted">{kpi.laborUtilizationPct.toFixed(1)}% this month</p>
+                    </div>
+                  </li>
+                )}
                 {!kpi && (
                   <li className="text-xs text-content-muted py-4 text-center">Loading…</li>
+                )}
+                {kpi && kpi.aogCount === 0 && aging && (aging['61_90'] + aging['90_PLUS']) === 0 && (kpi.laborUtilizationPct == null || kpi.laborUtilizationPct >= 50) && (
+                  <li className="text-xs text-intent-success py-2 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-intent-success" />All systems nominal
+                  </li>
                 )}
               </ul>
             </CardContent>

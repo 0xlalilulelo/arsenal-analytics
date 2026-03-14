@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
-import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink } from 'lucide-react';
+import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
   LABOR: 'Labor', PARTS: 'Parts', SHOP_SUPPLIES: 'Shop Supplies',
@@ -90,6 +90,12 @@ export default function InvoiceDetailPage() {
                 <CheckCircle2 className="h-3.5 w-3.5" />Record Payment
               </Button>
             )}
+            <Button
+              variant="ghost" size="sm" className="h-8 text-xs gap-1"
+              onClick={() => window.open(`/print/invoices/${id}`, '_blank')}
+            >
+              <Printer className="h-3.5 w-3.5" />Print
+            </Button>
             {inv.portalToken && (
               <Button
                 variant="ghost" size="sm" className="gap-1 h-8 text-xs"

@@ -1,10 +1,12 @@
 'use client';
 import { use, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Plane, Loader2, FileText, Wrench } from 'lucide-react';
+import { CheckCircle2, Plane, Loader2, FileText, Wrench, CreditCard, ExternalLink, Printer } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
   LABOR: 'Labor', PARTS: 'Parts', SHOP_SUPPLIES: 'Shop Supplies',
@@ -52,7 +54,10 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 export default function PortalInvoicePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  const searchParams = useSearchParams();
+  const paymentStatus = searchParams.get('payment');
   const { data, isLoading, error } = usePortalInvoice(token);
+  const [checkoutPending, setCheckoutPending] = useState(false);
 
   // Mark as VIEWED on first open
   useEffect(() => {
@@ -60,6 +65,17 @@ export default function PortalInvoicePage({ params }: { params: Promise<{ token:
       fetch(`/api/portal/invoices/${token}/view`, { method: 'POST' }).catch(() => {});
     }
   }, [data?.data?.status, token]);
+
+  async function handlePayOnline(invoiceId: string) {
+    setCheckoutPending(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/checkout`, { method: 'POST' });
+      const json = await res.json();
+      if (json.checkoutUrl) window.location.href = json.checkoutUrl;
+    } finally {
+      setCheckoutPending(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -268,11 +284,49 @@ export default function PortalInvoicePage({ params }: { params: Promise<{ token:
           </Card>
         )}
 
-        {/* Payment instructions */}
+        {/* Payment success/cancelled flash */}
+        {paymentStatus === 'success' && (
+          <div className="rounded-xl bg-intent-success/10 border border-intent-success/30 p-4 flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-intent-success shrink-0" />
+            <p className="text-sm text-intent-success font-medium">Payment received — thank you!</p>
+          </div>
+        )}
+        {paymentStatus === 'cancelled' && (
+          <div className="rounded-xl bg-surface-hover border border-surface-hover p-4">
+            <p className="text-sm text-content-secondary">Payment was cancelled. You can try again below.</p>
+          </div>
+        )}
+
+        {/* Pay Online CTA */}
+        {!isPaid && (
+          <div className="space-y-3">
+            <Button
+              className="w-full h-12 text-sm gap-2 bg-intent-success hover:bg-intent-success/90"
+              onClick={() => handlePayOnline(inv.id)}
+              disabled={checkoutPending}
+            >
+              {checkoutPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              Pay {formatCurrency(inv.balance)} Online
+            </Button>
+            <p className="text-center text-xs text-content-muted">Secure payment powered by Stripe. Accepts all major cards.</p>
+          </div>
+        )}
+
+        {/* Print link */}
+        <div className="flex justify-center">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 text-xs text-content-muted hover:text-content-secondary transition-colors"
+          >
+            <Printer className="h-3.5 w-3.5" />Print / Save as PDF
+          </button>
+        </div>
+
+        {/* Contact info */}
         {!isPaid && (
           <Card>
             <CardContent className="p-4 space-y-1">
-              <p className="text-xs font-semibold text-content-secondary">To arrange payment, please contact:</p>
+              <p className="text-xs font-semibold text-content-secondary">Questions? Contact us:</p>
               <p className="text-sm text-content-primary font-medium">{inv.org.name}</p>
               {inv.customer.phone && (
                 <a href={`tel:${inv.customer.phone}`} className="text-sm text-intent-primary hover:underline block">{inv.customer.phone}</a>
