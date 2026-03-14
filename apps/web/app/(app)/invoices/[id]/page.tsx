@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -37,6 +38,7 @@ export default function InvoiceDetailPage() {
   const [paymentMemo, setPaymentMemo] = useState('');
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const { can: userCan } = useCurrentUser();
 
   if (isLoading) {
     return (
@@ -85,7 +87,7 @@ export default function InvoiceDetailPage() {
                 <ChevronLeft className="h-3.5 w-3.5" />All Invoices
               </Button>
             </Link>
-            {inv.balance > 0 && (
+            {inv.balance > 0 && userCan.recordPayment() && (
               <Button size="sm" className="gap-1 h-8 text-xs" onClick={() => { setPaymentAmount(inv.balance.toFixed(2)); setPaymentOpen(true); }}>
                 <CheckCircle2 className="h-3.5 w-3.5" />Record Payment
               </Button>
@@ -110,7 +112,7 @@ export default function InvoiceDetailPage() {
                 {copied ? 'Copied!' : 'Copy Portal Link'}
               </Button>
             )}
-            <Button
+            {userCan.sendInvoice() && <Button
               variant={inv.status === 'SENT' ? 'ghost' : 'outline'}
               size="sm"
               className="gap-1 h-8 text-xs"
@@ -124,7 +126,7 @@ export default function InvoiceDetailPage() {
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Send className="h-3.5 w-3.5" />}
               {inv.status === 'SENT' ? 'Sent' : 'Send Invoice'}
-            </Button>
+            </Button>}
           </div>
         }
       />

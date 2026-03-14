@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { sendPaymentConfirmationEmail, APP_URL } from '@/lib/email';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
-      include: { payments: true },
+      include: { payments: true, customer: { select: { name: true, email: true } } },
     });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
@@ -43,6 +44,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         where: { id: invoiceId },
         data: { status: 'PAID', paidAt: new Date() },
       });
+    }
+
+    // Send payment confirmation email (non-blocking)
+    if (invoice.customer.email && invoice.portalToken) {
+      const newBalance = Math.max(0, remaining - amount);
+      sendPaymentConfirmationEmail({
+        to: invoice.customer.email,
+        customerName: invoice.customer.name,
+        invoiceNumber: invoice.invoiceNumber,
+        amountPaid: amount,
+        balance: newBalance,
+        method,
+        portalUrl: `${APP_URL}/portal/invoices/${invoice.portalToken}`,
+      }).catch(console.error);
     }
 
     return NextResponse.json({ data: payment }, { status: 201 });

@@ -171,4 +171,33 @@ export async function sendInviteEmail(opts: {
   return sendEmail({ to: email, subject, html });
 }
 
+// ── Payment received ──────────────────────────────────────────────────────────
+export async function sendPaymentConfirmationEmail(opts: {
+  to: string;
+  customerName: string;
+  invoiceNumber: string;
+  amountPaid: number;
+  balance: number;
+  method: string;
+  portalUrl: string;
+}) {
+  const { to, customerName, invoiceNumber, amountPaid, balance, method, portalUrl } = opts;
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const subject = `Payment Received — Invoice ${invoiceNumber}`;
+  const html = base(`
+    <div class="card">
+      <h2>Payment Confirmed</h2>
+      <p>Hi ${customerName},</p>
+      <p>We've received your payment. Thank you!</p>
+      <hr>
+      <p><strong>Invoice #:</strong> <span class="mono">${invoiceNumber}</span></p>
+      <p><strong>Amount Paid:</strong> <span class="gold">$${fmt(amountPaid)}</span></p>
+      <p><strong>Method:</strong> ${method.replace(/_/g, ' ')}</p>
+      ${balance > 0 ? `<p><strong>Remaining Balance:</strong> <span class="gold">$${fmt(balance)}</span></p>` : '<p style="color:#68d391;font-weight:600">✓ Paid in full — thank you!</p>'}
+      <a href="${portalUrl}" class="btn">View Invoice</a>
+    </div>
+  `);
+  return sendEmail({ to, subject, html });
+}
+
 export { APP_URL };

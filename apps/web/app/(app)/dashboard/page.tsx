@@ -1,4 +1,6 @@
 'use client';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
@@ -11,6 +13,16 @@ import {
   ClipboardList, DollarSign, Clock, TrendingUp,
   AlertCircle, Wrench, BarChart2, Package,
 } from 'lucide-react';
+
+function ForbiddenBanner() {
+  const sp = useSearchParams();
+  if (sp.get('error') !== 'forbidden') return null;
+  return (
+    <div className="mx-6 mt-4 rounded-lg border border-intent-danger/30 bg-intent-danger/10 px-4 py-3 text-sm text-intent-danger">
+      You don&apos;t have permission to access that page.
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { data: kpiResp } = useKpiMetrics();
@@ -28,6 +40,7 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full">
       <Topbar title="Dashboard" subtitle="Arsenal Aviation Services" />
 
+      <Suspense fallback={null}><ForbiddenBanner /></Suspense>
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* ─── KPI Row ─── */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

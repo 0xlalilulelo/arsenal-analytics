@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { Topbar } from '@/components/layout/Topbar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -136,6 +138,8 @@ function InviteDialog({ onSuccess }: { onSuccess: () => void }) {
 
 export default function UsersSettingsPage() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const { can: userCan, isLoading: authLoading } = useCurrentUser();
   const [removeTarget, setRemoveTarget] = useState<OrgUser | null>(null);
   const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
 
@@ -177,6 +181,12 @@ export default function UsersSettingsPage() {
 
   const users = data?.data?.users ?? [];
   const invites = data?.data?.invites ?? [];
+
+  // Client-side guard: redirect if user lacks OWNER role (middleware handles server-side)
+  if (!authLoading && !userCan.manageUsers()) {
+    router.replace('/dashboard?error=forbidden');
+    return null;
+  }
 
   return (
     <div className="flex flex-col h-full">

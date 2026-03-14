@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
@@ -65,6 +66,7 @@ export default function WorkOrderDetailPage() {
 
   const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
   const wo = data?.data;
+  const { can: userCan } = useCurrentUser();
 
   const { mutateAsync: updatePartStatus } = useMutation({
     mutationFn: async ({ partRequestId, status }: { partRequestId: string; status: string }) => {
@@ -204,16 +206,18 @@ export default function WorkOrderDetailPage() {
               <AlertCircle className="h-3.5 w-3.5" />
               Squawks ({wo.squawks.length})
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1"
-              onClick={() => setInvoiceDialogOpen(true)}
-              disabled={wo.status === 'INVOICED'}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              {wo.status === 'INVOICED' ? 'Invoiced' : 'Generate Invoice'}
-            </Button>
+            {userCan.sendInvoice() && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1"
+                onClick={() => setInvoiceDialogOpen(true)}
+                disabled={wo.status === 'INVOICED'}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {wo.status === 'INVOICED' ? 'Invoiced' : 'Generate Invoice'}
+              </Button>
+            )}
           </div>
         }
       />
