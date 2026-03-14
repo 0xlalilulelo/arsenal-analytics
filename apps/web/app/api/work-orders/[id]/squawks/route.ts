@@ -44,14 +44,15 @@ export async function POST(request: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, _ctx: Params) {
   try {
     const body = await request.json();
-    const { squawkId, status, approvedBy, declineReason } = body;
+    const { squawkId, status, approvedBy, declineReason, photoUrls } = body;
 
     const squawk = await prisma.squawk.update({
       where: { id: squawkId },
       data: {
-        status,
+        ...(status ? { status } : {}),
         ...(status === 'APPROVED' ? { approvedBy, approvedAt: new Date() } : {}),
         ...(status === 'DECLINED' ? { declinedAt: new Date(), declineReason } : {}),
+        ...(Array.isArray(photoUrls) ? { photoUrls } : {}),
       },
     });
 

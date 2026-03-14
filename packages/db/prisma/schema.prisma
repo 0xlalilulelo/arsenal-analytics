@@ -579,6 +579,7 @@ model ComplianceItem {
   stcFee          Float?
   completedAt     DateTime?
   notes           String?
+  documentUrls    String[]       @default([])
   createdAt       DateTime       @default(now())
 }
 

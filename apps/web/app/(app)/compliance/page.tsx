@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Clock, AlertTriangle, Search, Loader2, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { FileUpload, FileList } from '@/components/ui/file-upload';
 
 function useCompliance(params: { search?: string; type?: string; status?: string }) {
   return useQuery({
@@ -42,7 +43,7 @@ function useWorkOrders() {
 function useAddComplianceItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { workOrderId: string; type: string; referenceId: string; description: string; form337Required: boolean }) => {
+    mutationFn: async (data: { workOrderId: string; type: string; referenceId: string; description: string; form337Required: boolean; documentUrls?: string[] }) => {
       const res = await fetch('/api/compliance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +76,7 @@ export default function CompliancePage() {
   const [referenceId, setReferenceId] = useState('');
   const [description, setDescription] = useState('');
   const [form337, setForm337] = useState(false);
+  const [documentUrls, setDocumentUrls] = useState<string[]>([]);
 
   const { data, isLoading } = useCompliance({ search: search || undefined, type: typeFilter, status: statusFilter });
   const { data: woData } = useWorkOrders();
@@ -88,8 +90,8 @@ export default function CompliancePage() {
 
   async function handleAdd() {
     if (!woId || !referenceId.trim() || !description.trim()) return;
-    await addItem({ workOrderId: woId, type: itemType, referenceId: referenceId.trim(), description: description.trim(), form337Required: form337 });
-    setWoId(''); setItemType('AD'); setReferenceId(''); setDescription(''); setForm337(false);
+    await addItem({ workOrderId: woId, type: itemType, referenceId: referenceId.trim(), description: description.trim(), form337Required: form337, documentUrls });
+    setWoId(''); setItemType('AD'); setReferenceId(''); setDescription(''); setForm337(false); setDocumentUrls([]);
     setShowAdd(false);
   }
 
@@ -253,6 +255,17 @@ export default function CompliancePage() {
               />
               Form 337 required
             </label>
+            <div>
+              <Label className="text-xs">Attach Documents (PDF, images)</Label>
+              <div className="mt-1.5">
+                <FileUpload
+                  prefix="compliance/"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                  onUpload={(url) => setDocumentUrls(prev => [...prev, url])}
+                />
+                <FileList urls={documentUrls} onRemove={(url) => setDocumentUrls(prev => prev.filter(u => u !== url))} />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowAdd(false)}>Cancel</Button>

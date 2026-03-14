@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JobProfitabilityChart } from '@/components/analytics/JobProfitabilityChart';
 import { formatCurrency, formatPct } from '@/lib/utils';
-import { BarChart3, TrendingUp, Users, ArrowUpRight, ArrowDownRight, Loader2, Download } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, ArrowUpRight, ArrowDownRight, Loader2, Download, Printer } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useKpiMetrics } from '@/hooks/useAnalytics';
 
@@ -68,6 +68,24 @@ function useArAging() {
   });
 }
 
+function exportArAgingCsv(byCustomer: ArAgingCustomer[]) {
+  const header = ['Customer', 'Account #', 'Current', '1–30 Days', '31–60 Days', '61–90 Days', '90+ Days', 'Total', 'Invoices'];
+  const rows = byCustomer.map(c => [
+    c.customerName, c.accountNumber ?? '',
+    c.current.toFixed(2), c.days1_30.toFixed(2), c.days31_60.toFixed(2),
+    c.days61_90.toFixed(2), c.days90plus.toFixed(2), c.total.toFixed(2),
+    String(c.invoiceCount),
+  ]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ar-aging-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportCsv(stats: TechStat[], totals: { billedHours: number; availableHours: number; revenueGenerated: number } | undefined, range: string) {
   const header = ['Technician', 'Certifications', 'Billed Hours', 'Available Hours', 'Utilization %', 'Revenue Generated', '$/hr'];
   const rows = stats.map(t => [
@@ -101,6 +119,7 @@ export default function ReportsPage() {
   const { data: techData, isLoading: techLoading } = useTechnicianEfficiency(dateRange);
   const { data: kpiData } = useKpiMetrics();
   const { data: agingData, isLoading: agingLoading } = useArAging();
+  const rangeLabel = DATE_RANGES.find(r => r.value === dateRange)?.label ?? dateRange;
 
   const stats = techData?.data ?? [];
   const totals = techData?.totals;
@@ -114,6 +133,12 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Print header — hidden on screen, visible when printing */}
+      <div className="hidden print:block px-8 py-6 border-b">
+        <p className="text-xs font-semibold tracking-widest uppercase text-gray-500">Arsenal Aviation Services</p>
+        <h1 className="text-2xl font-bold mt-1">Reports &amp; Analytics</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Period: {rangeLabel} · Generated {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      </div>
       <Topbar
         title="Reports & Analytics"
         subtitle="Job profitability, mechanic efficiency, and financial summaries"
@@ -138,11 +163,30 @@ export default function ReportsPage() {
               variant="outline"
               size="sm"
               className="h-8 text-xs gap-1.5"
+              onClick={() => exportArAgingCsv(aging?.byCustomer ?? [])}
+              disabled={!aging?.byCustomer?.length}
+            >
+              <Download className="h-3.5 w-3.5" />
+              AR Aging CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
               onClick={() => exportCsv(stats, totals, dateRange)}
               disabled={stats.length === 0}
             >
               <Download className="h-3.5 w-3.5" />
-              Export CSV
+              Efficiency CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 print:hidden"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print / PDF
             </Button>
           </div>
         }

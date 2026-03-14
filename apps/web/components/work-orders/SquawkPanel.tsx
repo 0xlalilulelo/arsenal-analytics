@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FileUpload, FileList } from '@/components/ui/file-upload';
 import { formatCurrency } from '@/lib/utils';
 import { useSquawkApproval } from '@/hooks/useWorkOrders';
 import { CheckCircle2, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
@@ -17,6 +18,7 @@ export interface Squawk {
   isAirworthiness: boolean;
   approvedBy?: string | null;
   approvedAt?: string | null;
+  photoUrls?: string[];
 }
 
 interface SquawkPanelProps {
@@ -27,8 +29,9 @@ interface SquawkPanelProps {
   workOrderId: string;
 }
 
-function SquawkCard({ squawk, onApprove, onDecline, onDefer }: {
+function SquawkCard({ squawk, workOrderId, onApprove, onDecline, onDefer }: {
   squawk: Squawk;
+  workOrderId: string;
   onApprove: (id: string) => void;
   onDecline: (id: string) => void;
   onDefer: (id: string) => void;
@@ -104,6 +107,26 @@ function SquawkCard({ squawk, onApprove, onDecline, onDefer }: {
               Approved by {squawk.approvedBy}
             </p>
           )}
+
+          {/* Photos */}
+          <div>
+            {squawk.photoUrls && squawk.photoUrls.length > 0 && (
+              <FileList urls={squawk.photoUrls} />
+            )}
+            <FileUpload
+              prefix={`squawks/${squawk.id}/`}
+              accept="image/*,.pdf"
+              onUpload={async (url) => {
+                const existing = squawk.photoUrls ?? [];
+                await fetch(`/api/work-orders/${workOrderId}/squawks`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ squawkId: squawk.id, photoUrls: [...existing, url] }),
+                });
+              }}
+              className="mt-1"
+            />
+          </div>
 
           {/* Actions */}
           {squawk.status === 'PENDING_APPROVAL' && (
@@ -209,6 +232,7 @@ export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrder
             <SquawkCard
               key={squawk.id}
               squawk={squawk}
+              workOrderId={workOrderId}
               onApprove={handleApprove}
               onDecline={handleDecline}
               onDefer={handleDefer}

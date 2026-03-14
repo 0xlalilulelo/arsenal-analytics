@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
     const body = await request.json();
-    const { workOrderId, type, referenceId, description, form337Required } = body;
+    const { workOrderId, type, referenceId, description, form337Required, documentUrls } = body;
 
     if (!workOrderId) return NextResponse.json({ error: 'workOrderId required' }, { status: 422 });
     if (!type) return NextResponse.json({ error: 'type required' }, { status: 422 });
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         referenceId: referenceId.trim(),
         description: description.trim(),
         form337Required: form337Required ?? false,
+        documentUrls: Array.isArray(documentUrls) ? documentUrls : [],
       },
       include: {
         workOrder: { select: { id: true, number: true, aircraft: { select: { nNumber: true } } } },
