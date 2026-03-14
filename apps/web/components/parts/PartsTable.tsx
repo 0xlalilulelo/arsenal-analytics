@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { formatCurrency } from '@/lib/utils';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, ArrowUpDown } from 'lucide-react';
 import { getMarkupBreakdown } from '@mro/core';
 
 export type PartRow = {
@@ -74,7 +74,15 @@ function MarkupCell({ unitCost, markupPct }: { unitCost: number; markupPct: numb
   );
 }
 
-export function PartsTable({ parts, onEdit }: { parts: PartRow[]; onEdit?: (part: PartRow) => void }) {
+export function PartsTable({
+  parts,
+  onEdit,
+  onAdjustStock,
+}: {
+  parts: PartRow[];
+  onEdit?: (part: PartRow) => void;
+  onAdjustStock?: (part: PartRow) => void;
+}) {
   if (parts.length === 0) {
     return (
       <div className="rounded-lg border border-surface-hover p-12 text-center">
@@ -150,11 +158,21 @@ export function PartsTable({ parts, onEdit }: { parts: PartRow[]; onEdit?: (part
                   {part.bin ?? '—'}
                 </td>
                 <td className="py-3 px-4">
-                  {onEdit && (
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onEdit(part)}>
-                      Edit
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1 justify-end">
+                    {onAdjustStock && (
+                      <Button
+                        variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                        onClick={() => onAdjustStock(part)}
+                      >
+                        <ArrowUpDown className="h-3 w-3" />Stock
+                      </Button>
+                    )}
+                    {onEdit && (
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onEdit(part)}>
+                        Edit
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );

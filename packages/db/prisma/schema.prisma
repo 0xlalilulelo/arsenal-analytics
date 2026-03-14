@@ -354,12 +354,15 @@ model Part {
   partNumber     String
   altPartNumbers String[]      @default([])
   description    String
+  category       String?       // e.g. "Avionics", "Engine", "Airframe"
   condition      PartCondition @default(NEW)
   manufacturer   String?
   qtyOnHand      Int           @default(0)
+  reorderPoint   Int?          // alert when qtyOnHand drops to or below this
+  reorderQty     Int?          // suggested order quantity
   unitCost       Float
   markupPct      Float
-  bin            String?
+  bin            String?       // shelf/bin location e.g. "A-12-3"
   notes          String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
