@@ -1,4 +1,4 @@
-import { PrismaClient, WorkOrderStatus, WorkOrderType, BillingModel, InvoiceStatus, PaymentMethod, SquawkStatus, PartCondition, PartRequestStatus, POStatus, ComplianceType, LineItemStatus, QuoteStatus, QuoteLineCategory } from '@prisma/client';
+import { PrismaClient, WorkOrderStatus, WorkOrderType, BillingModel, InvoiceStatus, PaymentMethod, SquawkStatus, PartCondition, PartRequestStatus, POStatus, ComplianceType, LineItemStatus, QuoteStatus, QuoteLineCategory, UserRole } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +14,24 @@ async function main() {
       slug: 'skyline-aviation',
     },
   });
+
+  // ─── Users ──────────────────────────────────────────────────────────────────
+  const seedUsers: { id: string; email: string; name: string; role: UserRole }[] = [
+    { id: 'user-owner', email: 'admin@skylineaviation.com', name: 'Rachel Harrington', role: 'OWNER' },
+    { id: 'user-mgr', email: 'manager@skylineaviation.com', name: 'Tom Kowalski', role: 'MANAGER' },
+    { id: 'user-acct', email: 'billing@skylineaviation.com', name: 'Priya Nair', role: 'ACCOUNTANT' },
+    { id: 'user-tech1', email: 'jsmith@skylineaviation.com', name: 'Jake Smith', role: 'TECHNICIAN' },
+    { id: 'user-tech2', email: 'ldavis@skylineaviation.com', name: 'Lisa Davis', role: 'TECHNICIAN' },
+    { id: 'user-parts', email: 'parts@skylineaviation.com', name: 'Marco Reyes', role: 'PARTS_CLERK' },
+  ];
+
+  for (const u of seedUsers) {
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { name: u.name, role: u.role },
+      create: { id: u.id, orgId: org.id, email: u.email, name: u.name, role: u.role },
+    });
+  }
 
   // ─── Labor Rates ────────────────────────────────────────────────────────────
   const standardRate = await prisma.laborRate.upsert({
@@ -857,6 +875,7 @@ async function main() {
   console.log(`   Purchase Orders: 2`);
   console.log(`   Markup Rules: 5 tiers (Phase 1)`);
   console.log(`   Quotes: 2 (1 Approved, 1 Sent — Phase 1)`);
+  console.log(`   Users: 6 (1 Owner, 1 Manager, 1 Accountant, 2 Technicians, 1 Parts Clerk)`);
 }
 
 main()

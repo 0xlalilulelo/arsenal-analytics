@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Users, DollarSign, Wrench, Building2, ChevronRight, Package, CheckCircle2, Loader2 } from 'lucide-react';
+import { Users, DollarSign, Wrench, Building2, ChevronRight, Package, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const SETTINGS_NAV = [
@@ -28,6 +28,12 @@ const SETTINGS_NAV = [
     icon: <DollarSign className="h-5 w-5" />,
     title: 'Labor Rates',
     description: 'Shop-wide default labor rates, AOG multipliers, and markup defaults',
+  },
+  {
+    href: '/settings/users',
+    icon: <ShieldCheck className="h-5 w-5" />,
+    title: 'User Management',
+    description: 'Invite team members, assign roles, and manage access permissions',
   },
   {
     href: '/settings/markup-rules',

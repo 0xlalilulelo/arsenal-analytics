@@ -24,6 +24,7 @@ model Organization {
   parts            Part[]
   purchaseOrders   PurchaseOrder[]
   users            User[]
+  userInvites      UserInvite[]
   quotes           Quote[]
   markupRules      MarkupRule[]
   aogEvents        AOGEvent[]
@@ -53,6 +54,21 @@ enum UserRole {
   TECHNICIAN
   PARTS_CLERK
   ACCOUNTANT
+}
+
+model UserInvite {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  email     String
+  role      UserRole @default(TECHNICIAN)
+  token     String   @unique @default(cuid())
+  invitedBy String   // inviter userId
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, email])
 }
 
 model Account {

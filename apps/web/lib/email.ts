@@ -132,4 +132,26 @@ export async function sendAogAlertEmail(opts: {
   return sendEmail({ to, subject, html });
 }
 
+// ── User invite ───────────────────────────────────────────────────────────────
+export async function sendInviteEmail(opts: {
+  email: string;
+  inviterName: string;
+  orgName: string;
+  token: string;
+}) {
+  const { email, inviterName, orgName, token } = opts;
+  const inviteUrl = `${APP_URL}/invite/${token}`;
+  const subject = `You've been invited to ${orgName} on Arsenal Analytics`;
+  const html = base(`
+    <div class="card">
+      <h2>You're invited!</h2>
+      <p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on Arsenal Analytics.</p>
+      <p>Click the button below to accept your invitation and set up your account. This link expires in 7 days.</p>
+      <a href="${inviteUrl}" class="btn">Accept Invitation</a>
+      <p class="dim">If the button doesn't work, copy this link: ${inviteUrl}</p>
+    </div>
+  `);
+  return sendEmail({ to: email, subject, html });
+}
+
 export { APP_URL };
