@@ -8,8 +8,24 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 import { useTechnicians } from '@/hooks/useAnalytics';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Plus, Pencil, Loader2, X } from 'lucide-react';
+
+function useUtilization() {
+  return useQuery({
+    queryKey: ['technician-utilization'],
+    queryFn: async () => {
+      const res = await fetch('/api/technicians/utilization');
+      if (!res.ok) throw new Error('Failed to load utilization');
+      return res.json() as Promise<{ data: UtilRow[]; month: string }>;
+    },
+  });
+}
+
+type UtilRow = {
+  id: string; totalHours: number; billableHours: number;
+  billedRevenue: number; utilizationPct: number; margin: number | null; availableHours: number;
+};
 
 const COMMON_CERTS = ['A&P', 'IA', 'Avionics', 'Powerplant', 'Airframe'];
 
@@ -71,6 +87,8 @@ export default function TechniciansPage() {
 
   const { data, isLoading } = useTechnicians();
   const technicians = data?.data ?? [];
+  const { data: utilData } = useUtilization();
+  const utilMap = new Map((utilData?.data ?? []).map(u => [u.id, u]));
   const { mutateAsync: createTechnician, isPending: creating } = useCreateTechnician();
   const { mutateAsync: updateTechnician, isPending: updating } = useUpdateTechnician();
 
@@ -122,7 +140,28 @@ export default function TechniciansPage() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Current month utilization summary */}
+        {utilData && utilData.data.length > 0 && (
+          <div className="rounded-lg border border-surface-hover bg-surface-panel px-4 py-3 flex items-center gap-6 text-xs text-content-muted overflow-x-auto">
+            <span className="font-semibold text-content-secondary whitespace-nowrap">
+              {new Date(utilData.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </span>
+            {(() => {
+              const totBillable = utilData.data.reduce((s, u) => s + u.billableHours, 0);
+              const totRevenue = utilData.data.reduce((s, u) => s + u.billedRevenue, 0);
+              const avgUtil = utilData.data.length > 0 ? utilData.data.reduce((s, u) => s + u.utilizationPct, 0) / utilData.data.length : 0;
+              return (
+                <>
+                  <span>Total billable: <span className="font-mono text-content-primary font-semibold">{totBillable.toFixed(1)}h</span></span>
+                  <span>Billed revenue: <span className="font-mono text-intent-gold font-semibold">{formatCurrency(totRevenue)}</span></span>
+                  <span>Avg utilization: <span className={`font-mono font-semibold ${avgUtil >= 70 ? 'text-intent-success' : avgUtil >= 50 ? 'text-intent-warning' : 'text-intent-danger'}`}>{avgUtil.toFixed(1)}%</span></span>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         <div className="rounded-lg border border-surface-hover overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -131,24 +170,27 @@ export default function TechniciansPage() {
                 <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Certifications</th>
                 <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Billing Rate</th>
                 <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">AOG Rate</th>
-                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Cost Rate</th>
+                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">MTD Hours</th>
+                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">MTD Utilization</th>
+                <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">MTD Revenue</th>
                 <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Margin</th>
                 <th className="py-2.5 px-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-hover">
               {isLoading && (
-                <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-5 w-5 animate-spin text-content-muted mx-auto" /></td></tr>
+                <tr><td colSpan={9} className="py-12 text-center"><Loader2 className="h-5 w-5 animate-spin text-content-muted mx-auto" /></td></tr>
               )}
               {!isLoading && technicians.length === 0 && (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-content-muted">No technicians found.</td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-sm text-content-muted">No technicians found.</td></tr>
               )}
               {technicians.map((tech: TechRow) => {
                 const billRateVal = tech.billRate ?? 0;
                 const costRateVal = tech.costRate ?? 0;
-                const margin = billRateVal > 0 ? (billRateVal - costRateVal) / billRateVal : 0;
                 const aogRate = billRateVal * 1.5;
                 const certs: string[] = tech.certifications ?? [];
+                const util = utilMap.get(tech.id);
+                const utilPct = util?.utilizationPct ?? null;
                 return (
                   <tr key={tech.id} className="hover:bg-surface-hover/30">
                     <td className="py-3 px-4">
@@ -167,11 +209,34 @@ export default function TechniciansPage() {
                     <td className="py-3 px-4 text-right font-mono text-xs text-intent-warning">
                       {formatCurrency(aogRate)}/hr
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-xs text-content-muted">
-                      {costRateVal > 0 ? `${formatCurrency(costRateVal)}/hr` : '—'}
+                    <td className="py-3 px-4 text-right font-mono text-xs">
+                      {util ? (
+                        <span className="text-content-primary">
+                          {util.billableHours.toFixed(1)}
+                          <span className="text-content-muted">/{util.totalHours.toFixed(1)}h</span>
+                        </span>
+                      ) : <span className="text-content-muted">—</span>}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {utilPct != null ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`font-mono text-xs font-semibold ${utilPct >= 70 ? 'text-intent-success' : utilPct >= 50 ? 'text-intent-warning' : 'text-intent-danger'}`}>
+                            {utilPct.toFixed(1)}%
+                          </span>
+                          <div className="w-16 h-1.5 rounded-full bg-surface-hover overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${utilPct >= 70 ? 'bg-intent-success' : utilPct >= 50 ? 'bg-intent-warning' : 'bg-intent-danger'}`}
+                              style={{ width: `${Math.min(utilPct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : <span className="text-content-muted text-xs">—</span>}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-xs text-intent-gold">
+                      {util ? formatCurrency(util.billedRevenue) : '—'}
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-xs text-intent-success">
-                      {costRateVal > 0 ? `${(margin * 100).toFixed(0)}%` : '—'}
+                      {util?.margin != null ? `${util.margin.toFixed(0)}%` : costRateVal > 0 ? `${(((billRateVal - costRateVal) / billRateVal) * 100).toFixed(0)}%` : '—'}
                     </td>
                     <td className="py-3 px-4">
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tech)}>

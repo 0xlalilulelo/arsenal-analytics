@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
-import { ChevronLeft, CheckCircle2, Send, Loader2 } from 'lucide-react';
+import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
   LABOR: 'Labor', PARTS: 'Parts', SHOP_SUPPLIES: 'Shop Supplies',
@@ -35,6 +35,8 @@ export default function InvoiceDetailPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
   const [paymentMemo, setPaymentMemo] = useState('');
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   if (isLoading) {
     return (
@@ -88,17 +90,34 @@ export default function InvoiceDetailPage() {
                 <CheckCircle2 className="h-3.5 w-3.5" />Record Payment
               </Button>
             )}
+            {inv.portalToken && (
+              <Button
+                variant="ghost" size="sm" className="gap-1 h-8 text-xs"
+                onClick={async () => {
+                  const url = `${window.location.origin}/portal/invoices/${inv.portalToken}`;
+                  await navigator.clipboard.writeText(url);
+                  setPortalUrl(url); setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-intent-success" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied!' : 'Copy Portal Link'}
+              </Button>
+            )}
             <Button
               variant={inv.status === 'SENT' ? 'ghost' : 'outline'}
               size="sm"
               className="gap-1 h-8 text-xs"
-              onClick={() => updateInvoice({ status: 'SENT' })}
+              onClick={async () => {
+                const result = await updateInvoice({ status: 'SENT' }) as any;
+                if (result?.portalUrl) setPortalUrl(result.portalUrl);
+              }}
               disabled={sendPending || inv.status === 'PAID' || inv.status === 'SENT'}
             >
               {sendPending
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Send className="h-3.5 w-3.5" />}
-              {inv.status === 'SENT' ? 'Sent' : 'Mark as Sent'}
+              {inv.status === 'SENT' ? 'Sent' : 'Send Invoice'}
             </Button>
           </div>
         }
@@ -152,6 +171,32 @@ export default function InvoiceDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Portal link banner */}
+          {(portalUrl || (inv.portalToken && ['SENT','VIEWED','PARTIAL','OVERDUE'].includes(inv.status))) && (
+            <div className="rounded-lg border border-intent-primary/30 bg-intent-primary/5 px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <ExternalLink className="h-4 w-4 text-intent-primary shrink-0" />
+                <p className="text-xs text-content-secondary truncate">
+                  Customer portal:{' '}
+                  <span className="font-mono text-intent-primary">
+                    {(portalUrl ?? `${typeof window !== 'undefined' ? window.location.origin : ''}/portal/invoices/${inv.portalToken}`).replace(/^https?:\/\//, '')}
+                  </span>
+                </p>
+              </div>
+              <Button
+                variant="ghost" size="sm" className="h-7 text-xs gap-1 shrink-0"
+                onClick={async () => {
+                  const url = portalUrl ?? `${window.location.origin}/portal/invoices/${inv.portalToken}`;
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true); setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-intent-success" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+          )}
 
           {/* Line items */}
           <Card>

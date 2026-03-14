@@ -20,6 +20,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
+  PackageCheck, Hammer,
 } from 'lucide-react';
 
 const SHOP_SUPPLIES_PCT = 0.035;
@@ -64,6 +65,19 @@ export default function WorkOrderDetailPage() {
 
   const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
   const wo = data?.data;
+
+  const { mutateAsync: updatePartStatus } = useMutation({
+    mutationFn: async ({ partRequestId, status }: { partRequestId: string; status: string }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/parts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partRequestId, status, ...(status === 'RECEIVED' ? { receivedAt: new Date().toISOString() } : {}) }),
+      });
+      if (!res.ok) throw new Error('Failed to update part status');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
 
   const { mutateAsync: requestPart, isPending: requestingPart } = useMutation({
     mutationFn: async (data: { partNumber: string; description: string; qty: number; unitCost?: number }) => {
@@ -414,6 +428,7 @@ export default function WorkOrderDetailPage() {
                           <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Qty</th>
                           <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Unit Cost</th>
                           <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Status</th>
+                        <th className="py-2.5 px-4" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-surface-hover">
@@ -424,9 +439,28 @@ export default function WorkOrderDetailPage() {
                             <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.qty}</td>
                             <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.unitCost ? formatCurrency(pr.unitCost) : '—'}</td>
                             <td className="py-2.5 px-4">
-                              <Badge variant={pr.status === 'RECEIVED' ? 'complete' : pr.status === 'ORDERED' ? 'awaiting-parts' : 'open'}>
-                                {pr.status}
+                              <Badge variant={pr.status === 'RECEIVED' || pr.status === 'INSTALLED' ? 'complete' : pr.status === 'ON_ORDER' ? 'awaiting-parts' : 'open'}>
+                                {pr.status.replace(/_/g, ' ')}
                               </Badge>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center gap-1">
+                                {pr.status === 'REQUESTED' && (
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-intent-warning hover:text-intent-warning" onClick={() => updatePartStatus({ partRequestId: pr.id, status: 'ON_ORDER' })}>
+                                    <Package className="h-3 w-3" />Order
+                                  </Button>
+                                )}
+                                {(pr.status === 'REQUESTED' || pr.status === 'ON_ORDER') && (
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-intent-success hover:text-intent-success" onClick={() => updatePartStatus({ partRequestId: pr.id, status: 'RECEIVED' })}>
+                                    <PackageCheck className="h-3 w-3" />Receive
+                                  </Button>
+                                )}
+                                {pr.status === 'RECEIVED' && (
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-intent-primary hover:text-intent-primary" onClick={() => updatePartStatus({ partRequestId: pr.id, status: 'INSTALLED' })}>
+                                    <Hammer className="h-3 w-3" />Install
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}

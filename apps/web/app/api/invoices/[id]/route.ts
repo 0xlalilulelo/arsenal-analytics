@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { randomUUID } from 'crypto';
+import { sendInvoiceEmail, APP_URL } from '@/lib/email';
 
 type Params = { params: { id: string } };
 
@@ -23,14 +25,43 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const body = await request.json();
     const { status, notes } = body;
 
-    const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, select: { id: true } });
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: params.id },
+      include: { customer: { select: { name: true, email: true } } },
+    });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+
+    // When transitioning to SENT: generate portalToken and email customer
+    let portalToken = invoice.portalToken;
+    let emailSent = false;
+    let portalUrl: string | null = null;
+
+    if (status === 'SENT' && invoice.status !== 'SENT') {
+      portalToken = portalToken ?? randomUUID();
+      portalUrl = `${APP_URL}/portal/invoices/${portalToken}`;
+
+      if (invoice.customer.email) {
+        const result = await sendInvoiceEmail({
+          to: invoice.customer.email,
+          customerName: invoice.customer.name,
+          invoiceNumber: invoice.invoiceNumber,
+          total: invoice.total,
+          balance: invoice.balance,
+          dueDate: invoice.dueDate?.toISOString() ?? null,
+          portalUrl,
+        });
+        emailSent = result.sent;
+      }
+
+      console.log(`[INVOICE SEND] Invoice ${invoice.invoiceNumber} — portal URL: ${portalUrl}`);
+    }
 
     const updated = await prisma.invoice.update({
       where: { id: params.id },
       data: {
         ...(status ? { status } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        ...(portalToken ? { portalToken } : {}),
       },
       include: {
         customer: true,
@@ -40,9 +71,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       },
     });
 
-    return NextResponse.json({ data: updated });
+    return NextResponse.json({ data: updated, portalUrl, emailSent });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { randomUUID } from 'crypto';
+import { sendQuoteEmail, APP_URL } from '@/lib/email';
 
 /**
  * POST /api/quotes/[id]/send
  *
- * Marks the quote as SENT and generates a portalToken for the customer-facing
- * quote approval link. Email sending is stubbed (logs to console) — Resend
- * integration is a Phase 7 task.
+ * Marks the quote as SENT, generates a portalToken, and emails the customer.
  */
 export async function POST(
   _req: NextRequest,
@@ -33,17 +32,14 @@ export async function POST(
       );
     }
 
-    // Generate a unique approval token (used in the future customer portal URL)
     const approvalToken = randomUUID();
-    const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/portal/quotes/${approvalToken}`;
+    const approvalUrl = `${APP_URL}/portal/quotes/${approvalToken}`;
 
     const updated = await prisma.quote.update({
       where: { id },
       data: {
         status: 'SENT',
         sentAt: new Date(),
-        // Store token in notes field temporarily until Invoice portalToken pattern is mirrored for quotes
-        // TODO Phase 7: add Quote.portalToken field
         internalNotes: `approvalToken:${approvalToken}`,
       },
       include: {
@@ -53,16 +49,31 @@ export async function POST(
       },
     });
 
-    // Email stub — replace with Resend in Phase 7
-    console.log(`[QUOTE SEND] Quote ${quote.quoteNumber} sent to ${quote.customer.email ?? '(no email)'}`);
-    console.log(`[QUOTE SEND] Approval URL: ${approvalUrl}`);
+    // Send email to customer
+    let emailSent = false;
+    if (quote.customer.email) {
+      const result = await sendQuoteEmail({
+        to: quote.customer.email,
+        customerName: quote.customer.name,
+        quoteNumber: quote.quoteNumber,
+        total: quote.total,
+        aircraftNNumber: quote.aircraft?.nNumber,
+        approvalUrl,
+        validDays: quote.validDays,
+      });
+      emailSent = result.sent;
+    }
+
+    console.log(`[QUOTE SEND] Quote ${quote.quoteNumber} — approval URL: ${approvalUrl}`);
 
     return NextResponse.json({
       data: updated,
       approvalUrl,
-      emailSent: !!quote.customer.email,
+      emailSent,
       message: quote.customer.email
-        ? `Quote sent to ${quote.customer.email}`
+        ? emailSent
+          ? `Quote emailed to ${quote.customer.email}`
+          : `Quote marked as sent — copy the approval link (email delivery requires RESEND_API_KEY)`
         : 'Quote marked as sent (no email on file — copy the approval link manually)',
     });
   } catch (e) {
@@ -70,3 +81,4 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
