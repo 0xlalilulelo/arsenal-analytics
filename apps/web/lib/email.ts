@@ -132,6 +132,23 @@ export async function sendAogAlertEmail(opts: {
   return sendEmail({ to, subject, html });
 }
 
+// ── Password reset ────────────────────────────────────────────────────────────
+export async function sendPasswordResetEmail(opts: { to: string; name: string; resetUrl: string }) {
+  const { to, name, resetUrl } = opts;
+  const subject = 'Reset your Arsenal Analytics password';
+  const html = base(`
+    <div class="card">
+      <h2>Password Reset</h2>
+      <p>Hi ${name},</p>
+      <p>We received a request to reset your password. Click the button below to set a new one. This link expires in <strong>1 hour</strong>.</p>
+      <a href="${resetUrl}" class="btn">Reset Password</a>
+      <p class="dim">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
+      <p class="dim">If the button doesn't work, copy this link: ${resetUrl}</p>
+    </div>
+  `);
+  return sendEmail({ to, subject, html });
+}
+
 // ── User invite ───────────────────────────────────────────────────────────────
 export async function sendInviteEmail(opts: {
   email: string;

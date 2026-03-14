@@ -1,5 +1,5 @@
 'use client';
-import { use, useState, useEffect } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,10 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   const { token } = use(params);
   const router = useRouter();
   const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [accepted, setAccepted] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['invite', token],
@@ -33,10 +36,13 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
   const { mutateAsync: accept, isPending, error: acceptError } = useMutation({
     mutationFn: async () => {
+      setValidationError('');
+      if (password.length < 8) throw new Error('Password must be at least 8 characters');
+      if (password !== confirm) throw new Error('Passwords do not match');
       const res = await fetch(`/api/invites/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, password }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to accept invite');
       return res.json();
@@ -117,15 +123,41 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
               autoFocus
             />
           </div>
+          <div>
+            <Label htmlFor="invite-password" className="text-xs">Create Password</Label>
+            <Input
+              id="invite-password"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Min. 8 characters"
+              className="mt-1.5 h-8 text-sm"
+              minLength={8}
+            />
+          </div>
+          <div>
+            <Label htmlFor="invite-confirm" className="text-xs">Confirm Password</Label>
+            <Input
+              id="invite-confirm"
+              type="password"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder="Repeat password"
+              className="mt-1.5 h-8 text-sm"
+              minLength={8}
+            />
+          </div>
 
-          {acceptError && (
-            <p className="text-xs text-intent-danger">{(acceptError as Error).message}</p>
+          {(acceptError || validationError) && (
+            <p className="text-xs text-intent-danger">
+              {validationError || (acceptError as Error).message}
+            </p>
           )}
 
           <Button
             className="w-full"
             onClick={() => accept()}
-            disabled={isPending || !name.trim()}
+            disabled={isPending || !name.trim() || !password || !confirm}
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Accept &amp; Create Account

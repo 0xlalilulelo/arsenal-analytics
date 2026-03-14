@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { hashPassword } from '@/lib/password';
 
 /** GET /api/invites/[token] — look up invite details for display */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -27,7 +28,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 /** POST /api/invites/[token] — accept invite, create user account */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const { name, password } = await req.json() as { name: string; password?: string };
+  const { name, password } = await req.json() as { name: string; password: string };
+
+  if (!password || password.length < 8) {
+    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  }
 
   const invite = await prisma.userInvite.findUnique({
     where: { token },
@@ -38,28 +43,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (invite.acceptedAt) return NextResponse.json({ error: 'Already accepted' }, { status: 410 });
   if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite expired' }, { status: 410 });
 
-  // Check if user already exists (re-inviting an existing user to a new org)
   const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
   if (existingUser) {
     return NextResponse.json({ error: 'An account with this email already exists. Please sign in.' }, { status: 409 });
   }
 
-  // Create the user
-  const user = await prisma.user.create({
-    data: {
-      orgId: invite.orgId,
-      email: invite.email,
-      name: name || invite.email.split('@')[0],
-      role: invite.role,
-    },
-    select: { id: true, email: true, name: true, role: true },
-  });
+  const passwordHash = await hashPassword(password);
 
-  // Mark invite accepted
-  await prisma.userInvite.update({
-    where: { token },
-    data: { acceptedAt: new Date() },
-  });
+  const [user] = await prisma.$transaction([
+    prisma.user.create({
+      data: {
+        orgId: invite.orgId,
+        email: invite.email,
+        name: name?.trim() || invite.email.split('@')[0],
+        role: invite.role,
+        passwordHash,
+      },
+      select: { id: true, email: true, name: true, role: true },
+    }),
+    prisma.userInvite.update({
+      where: { token },
+      data: { acceptedAt: new Date() },
+    }),
+  ]);
 
   return NextResponse.json({ data: user });
 }

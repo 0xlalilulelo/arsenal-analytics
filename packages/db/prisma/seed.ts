@@ -1,6 +1,10 @@
 import { PrismaClient, WorkOrderStatus, WorkOrderType, BillingModel, InvoiceStatus, PaymentMethod, SquawkStatus, PartCondition, PartRequestStatus, POStatus, ComplianceType, LineItemStatus, QuoteStatus, QuoteLineCategory, UserRole } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Demo password for all seeded users — change before real production use
+const SEED_PASSWORD = process.env.SEED_PASSWORD ?? 'Arsenal2025!';
 
 async function main() {
   console.log('🌱 Seeding database...');
@@ -16,6 +20,8 @@ async function main() {
   });
 
   // ─── Users ──────────────────────────────────────────────────────────────────
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
+
   const seedUsers: { id: string; email: string; name: string; role: UserRole }[] = [
     { id: 'user-owner', email: 'admin@skylineaviation.com', name: 'Rachel Harrington', role: 'OWNER' },
     { id: 'user-mgr', email: 'manager@skylineaviation.com', name: 'Tom Kowalski', role: 'MANAGER' },
@@ -28,8 +34,8 @@ async function main() {
   for (const u of seedUsers) {
     await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, role: u.role },
-      create: { id: u.id, orgId: org.id, email: u.email, name: u.name, role: u.role },
+      update: { name: u.name, role: u.role, passwordHash },
+      create: { id: u.id, orgId: org.id, email: u.email, name: u.name, role: u.role, passwordHash },
     });
   }
 
