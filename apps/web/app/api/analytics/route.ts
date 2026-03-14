@@ -22,7 +22,6 @@ export async function GET(_req: NextRequest) {
     prisma.workOrder.count({ where: { orgId, status: { in: ['IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL'] } } }),
     prisma.workOrder.count({ where: { orgId, type: 'AOG', status: { in: ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS'] } } }),
     prisma.invoice.findMany({ where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'OVERDUE'] } }, select: { balance: true, dueDate: true, issueDate: true } }),
-    // WIP: sum of estimatedTotal on active WOs
     prisma.workOrder.aggregate({ _sum: { estimatedTotal: true }, where: { orgId, status: { in: ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL'] } } }),
     // Labor utilization: billable labor entries this month
     prisma.laborEntry.findMany({

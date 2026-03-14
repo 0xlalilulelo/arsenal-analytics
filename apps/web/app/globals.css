@@ -1,4 +1,4 @@
-@import "../../packages/tokens/src/globals.css";
+@import "@mro/tokens/globals.css";
 @import "tw-animate-css";
 
 @layer base {

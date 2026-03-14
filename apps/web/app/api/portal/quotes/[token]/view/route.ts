@@ -4,7 +4,7 @@ import { prisma } from '@mro/db';
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const quote = await prisma.quote.findFirst({
-    where: { internalNotes: { contains: `approvalToken:${token}` } },
+    where: { portalToken: token },
     select: { id: true, status: true },
   });
   if (!quote || quote.status !== 'SENT') return NextResponse.json({ ok: true });

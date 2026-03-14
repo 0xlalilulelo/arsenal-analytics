@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const quote = await prisma.quote.findFirst({
-    where: { internalNotes: { contains: `approvalToken:${token}` } },
+    where: { portalToken: token },
   });
 
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });

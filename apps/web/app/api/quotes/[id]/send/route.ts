@@ -40,7 +40,7 @@ export async function POST(
       data: {
         status: 'SENT',
         sentAt: new Date(),
-        internalNotes: `approvalToken:${approvalToken}`,
+        portalToken: approvalToken,
       },
       include: {
         customer: { select: { name: true, email: true } },
