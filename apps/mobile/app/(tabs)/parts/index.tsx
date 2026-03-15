@@ -7,11 +7,13 @@ import { colors } from '@mro/tokens';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import type { PartSummary } from '@mro/api-client';
 
 export default function PartsScreen() {
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['parts', search, lowStockOnly],
@@ -23,14 +25,19 @@ export default function PartsScreen() {
 
   return (
     <View style={styles.root}>
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search part number or description…"
-        placeholderTextColor={colors.content.muted}
-        value={search}
-        onChangeText={setSearch}
-        returnKeyType="search"
-      />
+      <View style={styles.searchRow}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search part number or description…"
+          placeholderTextColor={colors.content.muted}
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+        />
+        <Pressable onPress={() => setScannerOpen(true)} style={styles.scanBtn}>
+          <Text style={styles.scanBtnText}>⬡ Scan</Text>
+        </Pressable>
+      </View>
       <View style={styles.filterRow}>
         <Pressable
           onPress={() => setLowStockOnly(false)}
@@ -55,6 +62,15 @@ export default function PartsScreen() {
         }
         ListEmptyComponent={<Text style={styles.empty}>No parts found.</Text>}
         renderItem={({ item }) => <PartRow item={item} />}
+      />
+
+      <BarcodeScanner
+        visible={scannerOpen}
+        onScanned={data => {
+          setSearch(data);
+          setScannerOpen(false);
+        }}
+        onClose={() => setScannerOpen(false)}
       />
     </View>
   );
@@ -87,17 +103,6 @@ function PartRow({ item }: { item: PartSummary }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface.base },
-  searchInput: {
-    margin: 12,
-    backgroundColor: colors.surface.panel,
-    borderWidth: 1,
-    borderColor: colors.surface.active,
-    borderRadius: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.content.primary,
-  },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 12,
@@ -133,4 +138,25 @@ const styles = StyleSheet.create({
   qty: { fontSize: 12, color: colors.content.secondary },
   qtyLow: { color: colors.intent.warning },
   empty: { textAlign: 'center', color: colors.content.muted, marginTop: 48, fontSize: 14 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginVertical: 12 },
+  searchInput: {
+    flex: 1,
+    backgroundColor: colors.surface.panel,
+    borderWidth: 1,
+    borderColor: colors.surface.active,
+    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: colors.content.primary,
+  },
+  scanBtn: {
+    backgroundColor: colors.surface.panel,
+    borderWidth: 1,
+    borderColor: colors.intent.primary,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  scanBtnText: { color: colors.intent.primary, fontSize: 13, fontWeight: '600' },
 });

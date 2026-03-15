@@ -55,5 +55,14 @@ export function createWorkOrderEndpoints(client: ApiClient) {
         payload,
       );
     },
+
+    updateSquawkPhotos(workOrderId: string, squawkId: string, photoUrls: string[]) {
+      return client
+        .patch<{ data: Squawk }>(`/api/work-orders/${workOrderId}/squawks`, {
+          squawkId,
+          photoUrls,
+        })
+        .then(r => r.data);
+    },
   };
 }

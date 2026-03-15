@@ -7,6 +7,7 @@ export { createWorkOrderEndpoints } from './endpoints/work-orders';
 export { createPartsEndpoints } from './endpoints/parts';
 export { createTechnicianEndpoints } from './endpoints/technicians';
 export { createInvoiceEndpoints } from './endpoints/invoices';
+export { createPushTokenEndpoints } from './endpoints/push-tokens';
 
 import { ApiClient, type TokenProvider } from './client';
 import { createAuthEndpoints } from './endpoints/auth';
@@ -15,6 +16,7 @@ import { createWorkOrderEndpoints } from './endpoints/work-orders';
 import { createPartsEndpoints } from './endpoints/parts';
 import { createTechnicianEndpoints } from './endpoints/technicians';
 import { createInvoiceEndpoints } from './endpoints/invoices';
+import { createPushTokenEndpoints } from './endpoints/push-tokens';
 
 export function createMroClient(baseUrl: string, getToken: TokenProvider) {
   const client = new ApiClient(baseUrl, getToken);
@@ -25,5 +27,6 @@ export function createMroClient(baseUrl: string, getToken: TokenProvider) {
     parts: createPartsEndpoints(client),
     technicians: createTechnicianEndpoints(client),
     invoices: createInvoiceEndpoints(client),
+    pushTokens: createPushTokenEndpoints(client),
   };
 }

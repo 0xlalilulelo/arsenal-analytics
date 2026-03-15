@@ -2,12 +2,14 @@ import { useState } from 'react';
 import {
   ScrollView, View, Text, StyleSheet, RefreshControl,
   Modal, TextInput, Pressable, Switch, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform, FlatList,
+  KeyboardAvoidingView, Platform, Image, ActionSheetIOS,
 } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors } from '@mro/tokens';
 import { api } from '@/lib/api';
+import { pickAndUpload, takeAndUpload } from '@/lib/upload';
+import { enqueue } from '@/lib/offline-queue';
 import { Card } from '@/components/ui/Card';
 import { Badge, workOrderStatusVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -280,16 +282,12 @@ export default function WorkOrderDetailScreen() {
           <>
             <Text style={styles.sectionTitle}>Squawks ({data.squawks.length})</Text>
             {data.squawks.map((s) => (
-              <Card key={s.id} style={styles.squawkCard}>
-                <View style={styles.squawkHeader}>
-                  <Badge label={s.status.replace(/_/g, ' ')} variant={s.isAirworthiness ? 'danger' : 'default'} />
-                  {s.isAirworthiness && <Text style={styles.airworthy}>AIRWORTHINESS</Text>}
-                </View>
-                <Text style={styles.taskDesc}>{s.description}</Text>
-                {s.estTotal != null && (
-                  <Text style={styles.taskMeta}>Est: ${s.estTotal.toLocaleString()}</Text>
-                )}
-              </Card>
+              <SquawkCard
+                key={s.id}
+                squawk={s}
+                workOrderId={id}
+                onPhotosUpdated={() => qc.invalidateQueries({ queryKey: ['work-order', id] })}
+              />
             ))}
           </>
         )}
@@ -339,6 +337,89 @@ function TaskCard({
           </Pressable>
         )}
       </View>
+    </Card>
+  );
+}
+
+// ─── Squawk Card with photo attachment ────────────────────────────────────────
+
+import type { Squawk } from '@mro/api-client';
+
+function SquawkCard({
+  squawk: s,
+  workOrderId,
+  onPhotosUpdated,
+}: {
+  squawk: Squawk;
+  workOrderId: string;
+  onPhotosUpdated: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  async function handleAddPhoto() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
+        async buttonIndex => {
+          if (buttonIndex === 0) return;
+          await doUpload(buttonIndex === 1 ? 'camera' : 'library');
+        },
+      );
+    } else {
+      // Android: show alert picker
+      Alert.alert('Add Photo', 'Choose source', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Camera', onPress: () => doUpload('camera') },
+        { text: 'Photo Library', onPress: () => doUpload('library') },
+      ]);
+    }
+  }
+
+  async function doUpload(source: 'camera' | 'library') {
+    setUploading(true);
+    try {
+      const url = source === 'camera'
+        ? await takeAndUpload('squawks/')
+        : await pickAndUpload('squawks/');
+      if (!url) return;
+
+      const updated = [...s.photoUrls, url];
+      await api.workOrders.updateSquawkPhotos(workOrderId, s.id, updated);
+      onPhotosUpdated();
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Photo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Card style={styles.squawkCard}>
+      <View style={styles.squawkHeader}>
+        <Badge label={s.status.replace(/_/g, ' ')} variant={s.isAirworthiness ? 'danger' : 'default'} />
+        {s.isAirworthiness && <Text style={styles.airworthy}>AIRWORTHINESS</Text>}
+      </View>
+      <Text style={styles.taskDesc}>{s.description}</Text>
+      {s.estTotal != null && (
+        <Text style={styles.taskMeta}>Est: ${s.estTotal.toLocaleString()}</Text>
+      )}
+
+      {/* Photo thumbnails */}
+      {s.photoUrls.length > 0 && (
+        <View style={styles.photoRow}>
+          {s.photoUrls.map((url, i) => (
+            <Image key={i} source={{ uri: url }} style={styles.photoThumb} />
+          ))}
+        </View>
+      )}
+
+      {/* Add photo button */}
+      <Pressable onPress={handleAddPhoto} disabled={uploading} style={styles.addPhotoBtn}>
+        {uploading
+          ? <ActivityIndicator size="small" color={colors.intent.primary} />
+          : <Text style={styles.addPhotoBtnText}>+ Photo</Text>
+        }
+      </Pressable>
     </Card>
   );
 }
@@ -438,4 +519,21 @@ const styles = StyleSheet.create({
   },
   switchLabel: { fontSize: 15, color: colors.content.primary },
   modalActions: { marginTop: 24 },
+
+  // Squawk photo styles
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  photoThumb: { width: 64, height: 64, borderRadius: 4, backgroundColor: colors.surface.panel },
+  addPhotoBtn: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    backgroundColor: colors.surface.panel,
+    borderWidth: 1,
+    borderColor: colors.surface.active,
+    alignSelf: 'flex-start',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  addPhotoBtnText: { color: colors.intent.primary, fontSize: 13, fontWeight: '600' },
 });

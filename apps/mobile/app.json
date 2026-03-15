@@ -14,19 +14,52 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.arsenalmro.app"
+      "bundleIdentifier": "com.arsenalmro.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Arsenal MRO uses the camera to photograph squawks and scan part number barcodes.",
+        "NSPhotoLibraryUsageDescription": "Arsenal MRO accesses photos to attach documentation to squawk records.",
+        "NSPhotoLibraryAddUsageDescription": "Arsenal MRO saves photos to your library."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111418"
       },
-      "package": "com.arsenalmro.app"
+      "package": "com.arsenalmro.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Arsenal MRO to access your photos to attach documentation to squawk records.",
+          "cameraPermission": "Allow Arsenal MRO to use the camera to photograph squawks."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4C90F0",
+          "sounds": []
+        }
+      ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "replace-with-eas-project-id"
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

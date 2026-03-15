@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifyMobileToken } from '@/lib/mobile-auth';
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = [
@@ -20,7 +21,8 @@ const ALLOWED_TYPES = [
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  const mobileToken = await verifyMobileToken(request.headers.get('authorization'));
+  if (!session?.user && !mobileToken) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
