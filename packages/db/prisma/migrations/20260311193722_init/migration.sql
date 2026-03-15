@@ -59,6 +59,8 @@ CREATE TABLE "User" (
     "name" TEXT,
     "role" "UserRole" NOT NULL DEFAULT 'TECHNICIAN',
     "passwordHash" TEXT,
+    "passwordResetToken" TEXT,
+    "passwordResetExpiry" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
@@ -416,6 +418,7 @@ CREATE UNIQUE INDEX "Organization_slug_key" ON "Organization"("slug");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "User_passwordResetToken_key" ON "User"("passwordResetToken");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
