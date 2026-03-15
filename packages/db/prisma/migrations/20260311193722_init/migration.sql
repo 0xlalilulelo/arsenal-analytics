@@ -253,7 +253,10 @@ CREATE TABLE "Part" (
     "description" TEXT NOT NULL,
     "condition" "PartCondition" NOT NULL DEFAULT 'NEW',
     "manufacturer" TEXT,
+    "category" TEXT,
     "qtyOnHand" INTEGER NOT NULL DEFAULT 0,
+    "reorderPoint" INTEGER,
+    "reorderQty" INTEGER,
     "unitCost" DOUBLE PRECISION NOT NULL,
     "markupPct" DOUBLE PRECISION NOT NULL,
     "bin" TEXT,
@@ -408,6 +411,7 @@ CREATE TABLE "ComplianceItem" (
     "stcFee" DOUBLE PRECISION,
     "completedAt" TIMESTAMP(3),
     "notes" TEXT,
+    "documentUrls" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ComplianceItem_pkey" PRIMARY KEY ("id")
@@ -542,3 +546,30 @@ ALTER TABLE "BillingMilestone" ADD CONSTRAINT "BillingMilestone_workOrderId_fkey
 
 -- AddForeignKey
 ALTER TABLE "ComplianceItem" ADD CONSTRAINT "ComplianceItem_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- CreateTable
+CREATE TABLE "UserInvite" (
+    "id" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "role" "UserRole" NOT NULL DEFAULT 'TECHNICIAN',
+    "token" TEXT NOT NULL,
+    "invitedById" TEXT,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "acceptedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserInvite_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserInvite_token_key" ON "UserInvite"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserInvite_orgId_email_key" ON "UserInvite"("orgId", "email");
+
+-- AddForeignKey
+ALTER TABLE "UserInvite" ADD CONSTRAINT "UserInvite_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserInvite" ADD CONSTRAINT "UserInvite_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
