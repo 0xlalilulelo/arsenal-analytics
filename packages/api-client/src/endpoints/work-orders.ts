@@ -1,5 +1,5 @@
 import type { ApiClient } from '../client';
-import type { PaginatedResponse, WorkOrderSummary, WorkOrderDetail } from '../types';
+import type { PaginatedResponse, WorkOrderSummary, WorkOrderDetail, WorkOrderLineItem } from '../types';
 
 export interface WorkOrderFilters {
   status?: string;
@@ -7,6 +7,16 @@ export interface WorkOrderFilters {
   search?: string;
   page?: number;
   limit?: number;
+}
+
+export interface LogLaborPayload {
+  technicianId: string;
+  lineItemId?: string;
+  date: string;
+  hours: number;
+  rateUsed: number;
+  billable?: boolean;
+  description?: string;
 }
 
 export function createWorkOrderEndpoints(client: ApiClient) {
@@ -19,27 +29,31 @@ export function createWorkOrderEndpoints(client: ApiClient) {
       if (filters.page) params.set('page', String(filters.page));
       if (filters.limit) params.set('limit', String(filters.limit));
       const qs = params.toString();
-      return client.get<PaginatedResponse<WorkOrderSummary>>(`/api/work-orders${qs ? `?${qs}` : ''}`);
+      return client.get<PaginatedResponse<WorkOrderSummary>>(
+        `/api/work-orders${qs ? `?${qs}` : ''}`,
+      );
     },
 
     get(id: string) {
-      return client.get<WorkOrderDetail>(`/api/work-orders/${id}`);
+      return client
+        .get<{ data: WorkOrderDetail }>(`/api/work-orders/${id}`)
+        .then(r => r.data);
     },
 
-    updateStatus(id: string, status: string) {
-      return client.patch<WorkOrderDetail>(`/api/work-orders/${id}/status`, { status });
+    updateLineItemStatus(workOrderId: string, lineItemId: string, status: string) {
+      return client
+        .patch<{ data: WorkOrderLineItem }>(
+          `/api/work-orders/${workOrderId}/line-items/${lineItemId}`,
+          { status },
+        )
+        .then(r => r.data);
     },
 
-    logLabor(workOrderId: string, payload: {
-      technicianId: string;
-      lineItemId?: string;
-      date: string;
-      hours: number;
-      rateUsed: number;
-      billable?: boolean;
-      description?: string;
-    }) {
-      return client.post<{ id: string }>(`/api/work-orders/${workOrderId}/labor`, payload);
+    logLabor(workOrderId: string, payload: LogLaborPayload) {
+      return client.post<{ data: { id: string } }>(
+        `/api/work-orders/${workOrderId}/labor`,
+        payload,
+      );
     },
   };
 }

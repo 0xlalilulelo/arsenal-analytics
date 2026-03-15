@@ -2,17 +2,21 @@ import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '@mro/tokens';
 
+// Simple vector-free icons using unicode — swap for @expo/vector-icons in Phase 4
+const TAB_ICONS: Record<string, { default: string; active: string }> = {
+  index:         { default: '⬡', active: '⬡' },   // Dashboard
+  'work-orders': { default: '🔧', active: '🔧' },  // Work Orders
+  invoices:      { default: '📋', active: '📋' },  // Invoices
+  parts:         { default: '⬡', active: '⬡' },   // Parts
+  settings:      { default: '⚙', active: '⚙' },   // Settings
+};
+
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Dashboard: '⬡',
-    'Work Orders': '🔧',
-    Parts: '⬡',
-    Settings: '⚙',
-  };
+  const icon = TAB_ICONS[name] ?? { default: '•', active: '•' };
   return (
     <View style={styles.iconContainer}>
       <Text style={[styles.icon, focused && styles.iconFocused]}>
-        {icons[name] ?? '•'}
+        {focused ? icon.active : icon.default}
       </Text>
     </View>
   );
@@ -31,34 +35,42 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.intent.primary,
         tabBarInactiveTintColor: colors.content.muted,
+        tabBarLabelStyle: { fontSize: 10 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ focused }) => <TabIcon name="Dashboard" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="index" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="work-orders"
         options={{
           title: 'Work Orders',
-          tabBarIcon: ({ focused }) => <TabIcon name="Work Orders" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="work-orders" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="invoices"
+        options={{
+          title: 'Invoices',
+          tabBarIcon: ({ focused }) => <TabIcon name="invoices" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="parts"
         options={{
           title: 'Parts',
-          tabBarIcon: ({ focused }) => <TabIcon name="Parts" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="parts" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ focused }) => <TabIcon name="Settings" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="settings" focused={focused} />,
         }}
       />
     </Tabs>
@@ -66,15 +78,7 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  icon: {
-    fontSize: 18,
-    color: colors.content.muted,
-  },
-  iconFocused: {
-    color: colors.intent.primary,
-  },
+  iconContainer: { alignItems: 'center', justifyContent: 'center' },
+  icon: { fontSize: 16, color: colors.content.muted },
+  iconFocused: { color: colors.intent.primary },
 });
