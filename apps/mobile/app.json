@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Arsenal MRO",
+    "slug": "arsenal-mro",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "arsenal-mro",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111418"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.arsenalmro.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#111418"
+      },
+      "package": "com.arsenalmro.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

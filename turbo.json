@@ -24,6 +24,10 @@
     "db:seed": {
       "cache": false,
       "env": ["DATABASE_URL", "SEED_PASSWORD"]
+    },
+    "mobile:dev": {
+      "cache": false,
+      "persistent": true
     }
   }
 }
