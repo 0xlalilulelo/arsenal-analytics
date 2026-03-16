@@ -41,10 +41,15 @@ export async function POST(request: NextRequest, { params }: Params) {
 
 // PATCH /api/work-orders/[id]/squawks — approve/decline a squawk
 // Body: { squawkId, status: 'APPROVED' | 'DECLINED' | 'DEFERRED', approvedBy?, declineReason? }
-export async function PATCH(request: NextRequest, _ctx: Params) {
+export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const body = await request.json();
     const { squawkId, status, approvedBy, declineReason, photoUrls } = body;
+
+    const prevSquawk = await prisma.squawk.findUnique({
+      where: { id: squawkId },
+      select: { status: true, workOrderId: true, description: true },
+    });
 
     const squawk = await prisma.squawk.update({
       where: { id: squawkId },
@@ -55,6 +60,25 @@ export async function PATCH(request: NextRequest, _ctx: Params) {
         ...(Array.isArray(photoUrls) ? { photoUrls } : {}),
       },
     });
+
+    // Audit log for squawk status changes
+    if (status && prevSquawk && status !== prevSquawk.status) {
+      const wo = await prisma.workOrder.findUnique({ where: { id: params.id }, select: { orgId: true } });
+      if (wo) {
+        await prisma.auditLog.create({
+          data: {
+            orgId: wo.orgId,
+            entityType: 'WorkOrder',
+            entityId: params.id,
+            action: 'SQUAWK_STATUS_CHANGED',
+            actorName: approvedBy ?? null,
+            before: { squawkStatus: prevSquawk.status },
+            after: { squawkStatus: status },
+            meta: { squawkId, description: prevSquawk.description },
+          },
+        }).catch(() => {/* non-critical */});
+      }
+    }
 
     return NextResponse.json({ data: squawk });
   } catch (e) {

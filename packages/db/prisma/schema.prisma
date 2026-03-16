@@ -13,6 +13,16 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // Contact & identity
+  faaRepairStationNumber String?
+  phone                  String?
+  email                  String?
+  address                String?
+  // Operational defaults
+  shopSuppliesPct        Float    @default(0.035)
+  defaultTaxRatePct      Float    @default(0.0)
+  defaultBillingTerms    String   @default("NET_30")
+  laborRoundingMinutes   Int      @default(15)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -809,4 +819,22 @@ model CashFlowSnapshot {
   forecastBalance60d Float @default(0)
   forecastBalance90d Float @default(0)
   createdAt       DateTime @default(now())
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  orgId      String
+  entityType String   // "WorkOrder" | "Invoice" | "LaborEntry" | "Squawk"
+  entityId   String
+  action     String   // "STATUS_CHANGED" | "LABOR_LOGGED" | "SQUAWK_APPROVED" | "NOTE_UPDATED"
+  actorName  String?
+  before     Json?
+  after      Json?
+  meta       Json?    // additional context (e.g. hours logged, rate used)
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([orgId, createdAt])
 }

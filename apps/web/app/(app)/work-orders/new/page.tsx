@@ -23,6 +23,9 @@ const schema = z.object({
   nNumber: z.string().min(3, 'N-number required').max(10),
   type: z.enum(['INSPECTION', 'SCHEDULED', 'UNSCHEDULED', 'AOG']),
   billingModel: z.enum(['TIME_AND_MATERIALS', 'FLAT_RATE', 'HYBRID', 'NOT_TO_EXCEED', 'COST_PLUS']),
+  nteAmount: z.coerce.number().positive().optional(),
+  depositRequired: z.coerce.number().min(0).optional(),
+  depositCollected: z.coerce.number().min(0).optional(),
   estimatedClose: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -62,6 +65,7 @@ export default function NewWorkOrderPage() {
   ]);
 
   const woType = watch('type');
+  const billingModel = watch('billingModel');
 
   const addLineItem = () => {
     setLineItems(prev => [...prev, { id: String(Date.now()), description: '', estHours: 0, laborRate: woType === 'AOG' ? 172.5 : 115 }]);
@@ -75,10 +79,8 @@ export default function NewWorkOrderPage() {
   const shopSupplies = getShopSuppliesCharge(totalLaborEst);
 
   async function onSubmit(values: FormValues) {
-    // Look up aircraft by nNumber to get its id — simplified: pass nNumber and resolve server-side
     const result = await createWo({
       ...values,
-      nNumber: values.nNumber,
       lineItems: lineItems.filter(li => li.description.trim()),
     });
     router.push(`/work-orders/${result.data.id}`);
@@ -130,6 +132,48 @@ export default function NewWorkOrderPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* NTE Cap (conditional) */}
+          {billingModel === 'NOT_TO_EXCEED' && (
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">Not-to-Exceed Cap</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs">NTE Amount *</Label>
+                  <div className="relative mt-1.5">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted text-xs">$</span>
+                    <Input type="number" step="0.01" min="0" {...register('nteAmount')}
+                      className="h-8 pl-6 font-mono text-sm" placeholder="0.00" />
+                  </div>
+                  {errors.nteAmount && <p className="text-xs text-intent-danger mt-1">{errors.nteAmount.message}</p>}
+                  <p className="text-xs text-content-muted mt-1">Work will not exceed this amount without re-authorization</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Deposit */}
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Deposit</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Deposit Required</Label>
+                <div className="relative mt-1.5">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted text-xs">$</span>
+                  <Input type="number" step="0.01" min="0" {...register('depositRequired')}
+                    className="h-8 pl-6 font-mono text-sm" placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Deposit Collected</Label>
+                <div className="relative mt-1.5">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-muted text-xs">$</span>
+                  <Input type="number" step="0.01" min="0" {...register('depositCollected')}
+                    className="h-8 pl-6 font-mono text-sm" placeholder="0.00" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Customer + Aircraft */}
           <Card>

@@ -26,6 +26,7 @@ export type WorkOrderDetail = {
   actualTotal: number | null;
   nteAmount: number | null;
   depositAmount: number;
+  shopSuppliesPct: number;
   dateOpened: string;
   estimatedClose: string | null;
   notes: string | null;

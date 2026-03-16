@@ -79,6 +79,34 @@ export function useUpdateInvoice(invoiceId: string) {
   });
 }
 
+export function useCreateInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      customerId: string;
+      workOrderId?: string;
+      dueDate?: string;
+      taxRate?: number;
+      notes?: string;
+      lineItems?: Array<{ category: string; description: string; qty: number; unitPrice: number; taxable: boolean }>;
+    }) => {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Failed to create invoice');
+      }
+      return res.json() as Promise<{ data: { id: string; invoiceNumber: string } }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+}
+
 export function useRecordPayment(invoiceId: string) {
   const queryClient = useQueryClient();
   return useMutation({

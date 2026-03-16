@@ -31,7 +31,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     const body = await request.json();
-    const { notes, internalNotes, estimatedClose, estimatedTotal, status } = body;
+    const { notes, internalNotes, estimatedClose, estimatedTotal, status, actorName } = body;
+
+    // Read current state before update (for audit log before snapshot)
+    const current = await prisma.workOrder.findUnique({
+      where: { id: params.id },
+      select: { orgId: true, status: true, notes: true, estimatedTotal: true },
+    });
+    if (!current) return NextResponse.json({ error: 'Work order not found' }, { status: 404 });
+
     const wo = await prisma.workOrder.update({
       where: { id: params.id },
       data: {
@@ -42,6 +50,22 @@ export async function PUT(request: NextRequest, { params }: Params) {
         ...(status !== undefined ? { status, ...(status === 'CLOSED' ? { closedAt: new Date() } : {}) } : {}),
       },
     });
+
+    // Write audit log for status changes
+    if (status !== undefined && status !== current.status) {
+      await prisma.auditLog.create({
+        data: {
+          orgId: current.orgId,
+          entityType: 'WorkOrder',
+          entityId: params.id,
+          action: 'STATUS_CHANGED',
+          actorName: actorName ?? null,
+          before: { status: current.status },
+          after: { status },
+        },
+      }).catch(() => {/* non-critical */});
+    }
+
     return NextResponse.json({ data: wo });
   } catch (e) {
     console.error(e);

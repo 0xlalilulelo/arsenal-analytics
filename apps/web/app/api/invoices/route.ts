@@ -44,20 +44,24 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data: invoices, total, page, limit });
 }
 
-const SHOP_SUPPLIES_PCT = 0.035;
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { workOrderId, customerId, taxRate = 0, includeShopSupplies = false } = body;
+    const { workOrderId, customerId, taxRate = 0, includeShopSupplies = false, notes, dueDate: dueDateOverride, lineItems: manualLineItems } = body;
+
+    if (!customerId) return NextResponse.json({ error: 'customerId is required' }, { status: 400 });
 
     const orgId = await resolveOrgId();
     if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
-    const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { billingTerms: true } });
+    const [customer, org] = await Promise.all([
+      prisma.customer.findUnique({ where: { id: customerId }, select: { billingTerms: true } }),
+      prisma.organization.findFirst({ where: { id: orgId }, select: { shopSuppliesPct: true } }),
+    ]);
+    const SHOP_SUPPLIES_PCT = org?.shopSuppliesPct ?? 0.035;
     const terms = customer?.billingTerms ?? 'NET_30';
     const issueDate = new Date();
-    const dueDate = addDays(issueDate, TERMS_DAYS[terms] ?? 30);
+    const dueDate = dueDateOverride ? new Date(dueDateOverride) : addDays(issueDate, TERMS_DAYS[terms] ?? 30);
 
     const count = await prisma.invoice.count({ where: { orgId } });
     const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
@@ -66,7 +70,23 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
     let laborTotal = 0;
 
-    if (workOrderId) {
+    // Manual line items (standalone invoice creation)
+    if (Array.isArray(manualLineItems) && manualLineItems.length > 0) {
+      for (const li of manualLineItems) {
+        const t = (li.qty ?? 1) * (li.unitPrice ?? 0);
+        lineItemsData.push({
+          category: li.category ?? 'OTHER',
+          description: li.description ?? '',
+          qty: li.qty ?? 1,
+          unitPrice: li.unitPrice ?? 0,
+          total: t,
+          taxable: li.taxable ?? true,
+        });
+        subtotal += t;
+        if (li.category === 'LABOR') laborTotal += t;
+      }
+    } else if (workOrderId) {
+      // Auto-generate from WO labor entries and parts
       const entries = await prisma.laborEntry.findMany({
         where: { workOrderId, billable: true },
         include: { technician: { select: { name: true } } },
@@ -90,7 +110,7 @@ export async function POST(request: NextRequest) {
 
       if (includeShopSupplies && laborTotal > 0) {
         const shopAmt = Math.round(laborTotal * SHOP_SUPPLIES_PCT * 100) / 100;
-        lineItemsData.push({ category: 'SHOP_SUPPLIES', description: 'Shop Supplies (3.5% of labor)', qty: 1, unitPrice: shopAmt, total: shopAmt, taxable: true });
+        lineItemsData.push({ category: 'SHOP_SUPPLIES', description: `Shop Supplies (${(SHOP_SUPPLIES_PCT * 100).toFixed(1)}% of labor)`, qty: 1, unitPrice: shopAmt, total: shopAmt, taxable: true });
         subtotal += shopAmt;
       }
     }
@@ -111,6 +131,7 @@ export async function POST(request: NextRequest) {
         total,
         amountPaid: 0,
         balance: total,
+        notes: notes ?? null,
         lineItems: {
           create: lineItemsData.map((li, idx) => ({
             category: li.category as 'LABOR' | 'PARTS' | 'SHOP_SUPPLIES' | 'FREIGHT' | 'HANDLING' | 'SUBCONTRACT' | 'OTHER',

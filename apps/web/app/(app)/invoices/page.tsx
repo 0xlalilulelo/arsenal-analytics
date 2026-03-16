@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { InvoicesTable } from '@/components/invoices/InvoicesTable';
 import { formatCurrency } from '@/lib/utils';
 import { useInvoices } from '@/hooks/useInvoices';
+import Link from 'next/link';
 import { Plus, Search, Filter, Loader2 } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'DRAFT', 'SENT', 'VIEWED', 'PARTIAL', 'OVERDUE', 'PAID'];
@@ -39,8 +40,10 @@ export default function InvoicesPage() {
         title="Invoices & Payments"
         subtitle="AR aging · Invoice management · Payment tracking"
         actions={
-          <Button size="sm" className="h-8 text-xs gap-1">
-            <Plus className="h-3.5 w-3.5" />New Invoice
+          <Button size="sm" className="h-8 text-xs gap-1" asChild>
+            <Link href="/invoices/new">
+              <Plus className="h-3.5 w-3.5" />New Invoice
+            </Link>
           </Button>
         }
       />

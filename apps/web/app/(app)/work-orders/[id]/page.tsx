@@ -20,7 +20,7 @@ import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
 import { useCurrentUser } from '@/hooks/use-current-user';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
@@ -29,8 +29,6 @@ import {
 
 const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
 const LINE_ITEM_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETE', 'AWAITING_INSPECTION', 'SIGNED_OFF'];
-
-const SHOP_SUPPLIES_PCT = 0.035;
 
 function statusBadgeVariant(status: string) {
   const map: Record<string, 'open' | 'in-progress' | 'awaiting-parts' | 'awaiting-approval' | 'complete' | 'invoiced' | 'closed'> = {
@@ -115,6 +113,13 @@ export default function WorkOrderDetailPage() {
   const { data, isLoading, isError } = useWorkOrderDetail(workOrderId);
   const wo = data?.data;
   const { can: userCan } = useCurrentUser();
+
+  const { data: historyData } = useQuery<{ data: Array<{ id: string; action: string; actorName: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null; meta: Record<string, unknown> | null; createdAt: string }> }>({
+    queryKey: ['wo-history', workOrderId],
+    queryFn: () => fetch(`/api/work-orders/${workOrderId}/history`).then(r => r.json()),
+    enabled: !!workOrderId,
+  });
+  const auditLogs = historyData?.data ?? [];
 
   const { mutateAsync: updatePartStatus } = useMutation({
     mutationFn: async ({ partRequestId, status }: { partRequestId: string; status: string }) => {
@@ -343,7 +348,8 @@ export default function WorkOrderDetailPage() {
 
   const totalActualHours = wo.laborEntries.reduce((s, e) => s + e.hours, 0);
   const totalLaborBilled = wo.laborEntries.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rateUsed, 0);
-  const shopSupplies = totalLaborBilled * SHOP_SUPPLIES_PCT;
+  const shopSuppliesPct = wo.shopSuppliesPct ?? 0.035;
+  const shopSupplies = totalLaborBilled * shopSuppliesPct;
   const estimatedTotalLaborBilled = wo.lineItems.reduce((s, li) => s + li.estHours * li.laborRate, 0);
   const completedItems = wo.lineItems.filter(li => li.status === 'COMPLETE').length;
   const completionPct = wo.lineItems.length > 0 ? Math.round((completedItems / wo.lineItems.length) * 100) : 0;
@@ -435,7 +441,7 @@ export default function WorkOrderDetailPage() {
               {[
                 { label: 'Est. Total', value: formatCurrency(wo.estimatedTotal ?? 0), color: 'text-content-secondary' },
                 { label: 'Labor Billed', value: formatCurrency(totalLaborBilled), color: 'text-intent-primary' },
-                { label: `Shop Supplies (${formatPct(SHOP_SUPPLIES_PCT)})`, value: formatCurrency(shopSupplies), color: 'text-content-muted' },
+                { label: `Shop Supplies (${formatPct(shopSuppliesPct)})`, value: formatCurrency(shopSupplies), color: 'text-content-muted' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="text-right">
                   <p className="text-xs text-content-muted">{label}</p>
@@ -756,7 +762,7 @@ export default function WorkOrderDetailPage() {
                     {[
                       { label: 'Labor', value: totalLaborBilled, color: 'text-content-primary' },
                       { label: 'Parts', value: wo.partRequests.filter(p => p.status === 'RECEIVED').reduce((s, p) => s + (p.unitCost ?? 0) * p.qty, 0), color: 'text-content-primary' },
-                      { label: `Shop Supplies (${formatPct(SHOP_SUPPLIES_PCT)})`, value: shopSupplies, color: 'text-content-muted' },
+                      { label: `Shop Supplies (${formatPct(shopSuppliesPct)})`, value: shopSupplies, color: 'text-content-muted' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="flex justify-between">
                         <span className="text-content-muted">{label}</span>
@@ -902,7 +908,48 @@ export default function WorkOrderDetailPage() {
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-content-muted py-4 text-center">Full audit history coming soon.</p>
+                {auditLogs.length === 0 ? (
+                  <p className="text-xs text-content-muted py-4 text-center">No audit events yet. Status changes, labor logged, and squawk approvals will appear here.</p>
+                ) : (
+                  <div className="relative pl-5 space-y-0">
+                    <div className="absolute left-2 top-1 bottom-1 w-px bg-surface-hover" />
+                    {auditLogs.map(log => {
+                      const action = log.action.replace(/_/g, ' ');
+                      const before = log.before as Record<string, unknown> | null;
+                      const after = log.after as Record<string, unknown> | null;
+                      const meta = log.meta as Record<string, unknown> | null;
+                      return (
+                        <div key={log.id} className="relative pl-4 pb-4">
+                          <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-surface-active border border-surface-hover -translate-x-[4px]" />
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="text-xs font-medium text-content-primary capitalize">{action.toLowerCase()}</span>
+                              {log.actorName && <span className="text-xs text-content-muted ml-1">by {log.actorName}</span>}
+                              {before && after && Object.keys(after).length > 0 && (
+                                <div className="mt-0.5 text-xs text-content-muted">
+                                  {Object.entries(after).map(([k, v]) => (
+                                    <span key={k}>
+                                      <span className="text-content-muted">{k}: </span>
+                                      {before[k] !== undefined && <span className="line-through text-content-muted mr-1">{String(before[k])}</span>}
+                                      <span className="text-content-primary">{String(v)}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {meta && log.action === 'LABOR_LOGGED' && (
+                                <p className="mt-0.5 text-xs text-content-muted">
+                                  {String(meta.hours)} hrs @ ${String(meta.rateUsed)}/hr
+                                  {meta.description ? ` — ${String(meta.description)}` : ''}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-xs text-content-muted shrink-0">{formatDate(log.createdAt)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>
@@ -1527,7 +1574,7 @@ export default function WorkOrderDetailPage() {
           </DialogHeader>
           {wo && (() => {
             const partsTotal = wo.partRequests.filter(p => p.status === 'RECEIVED' || p.status === 'INSTALLED').reduce((s, p) => s + (p.unitBillPrice ?? p.unitCost ?? 0) * p.qty, 0);
-            const shopAmt = includeShopSupplies ? Math.round(totalLaborBilled * 0.035 * 100) / 100 : 0;
+            const shopAmt = includeShopSupplies ? Math.round(totalLaborBilled * shopSuppliesPct * 100) / 100 : 0;
             const taxRateVal = parseFloat(invTaxRate || '0') / 100;
             const taxable = partsTotal + shopAmt;
             const taxAmt = Math.round(taxable * taxRateVal * 100) / 100;
@@ -1546,9 +1593,9 @@ export default function WorkOrderDetailPage() {
                   <div className="flex justify-between items-center">
                     <label className="flex items-center gap-1.5 text-content-muted cursor-pointer">
                       <input type="checkbox" checked={includeShopSupplies} onChange={e => setIncludeShopSupplies(e.target.checked)} className="rounded" />
-                      Shop Supplies (3.5% of labor)
+                      Shop Supplies ({formatPct(shopSuppliesPct)} of labor)
                     </label>
-                    <span className={`font-mono ${includeShopSupplies ? '' : 'line-through text-content-muted'}`}>{formatCurrency(shopAmt || totalLaborBilled * 0.035)}</span>
+                    <span className={`font-mono ${includeShopSupplies ? '' : 'line-through text-content-muted'}`}>{formatCurrency(shopAmt || totalLaborBilled * shopSuppliesPct)}</span>
                   </div>
                   {taxRateVal > 0 && (
                     <div className="flex justify-between text-content-muted">
