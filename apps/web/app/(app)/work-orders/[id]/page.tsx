@@ -24,7 +24,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
-  PackageCheck, Hammer, Pencil, Trash2,
+  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw,
 } from 'lucide-react';
 
 const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
@@ -55,6 +55,27 @@ export default function WorkOrderDetailPage() {
   const [editLaborEntry, setEditLaborEntry] = useState<{ id: string; hours: number; description: string | null; billable: boolean; date: string } | null>(null);
   const [deleteLaborId, setDeleteLaborId] = useState<string | null>(null);
   const [deleteLineItemId, setDeleteLineItemId] = useState<string | null>(null);
+
+  // Warranty dialog state
+  const [warrantyPartId, setWarrantyPartId] = useState<string | null>(null);
+  const [wVendor, setWVendor] = useState('');
+  const [wMonths, setWMonths] = useState('12');
+  const [wInstallDate, setWInstallDate] = useState('');
+  const [wClaimStatus, setWClaimStatus] = useState('NONE');
+  const [wClaimRef, setWClaimRef] = useState('');
+  const [wNotes, setWNotes] = useState('');
+  const [wSaving, setWSaving] = useState(false);
+
+  // Core return dialog state
+  const [coreReturnPartId, setCoreReturnPartId] = useState<string | null>(null);
+  const [crPartNumber, setCrPartNumber] = useState('');
+  const [crDescription, setCrDescription] = useState('');
+  const [crValue, setCrValue] = useState('');
+  const [crVendor, setCrVendor] = useState('');
+  const [crDueDate, setCrDueDate] = useState('');
+  const [crTracking, setCrTracking] = useState('');
+  const [crNotes, setCrNotes] = useState('');
+  const [crSaving, setCrSaving] = useState(false);
 
   // WO edit form state
   const [woNotes, setWoNotes] = useState('');
@@ -253,6 +274,19 @@ export default function WorkOrderDetailPage() {
     mutationFn: async (lineItemId: string) => {
       const res = await fetch(`/api/work-orders/${workOrderId}/line-items/${lineItemId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete task card');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: toggle8130 } = useMutation({
+    mutationFn: async ({ partId, has8130 }: { partId: string; has8130: boolean }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/parts/${partId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ has8130 }),
+      });
+      if (!res.ok) throw new Error('Failed to update 8130 status');
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
@@ -644,13 +678,25 @@ export default function WorkOrderDetailPage() {
                           <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Qty</th>
                           <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Unit Cost</th>
                           <th className="text-left py-2.5 px-4 text-xs font-semibold text-content-muted">Status</th>
-                        <th className="py-2.5 px-4" />
+                          <th className="py-2.5 px-4" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-surface-hover">
                         {wo.partRequests.map(pr => (
                           <tr key={pr.id} className="hover:bg-surface-hover/30">
-                            <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{pr.partNumber}</td>
+                            <td className="py-2.5 px-4">
+                              <p className="font-mono text-xs text-content-secondary">{pr.partNumber}</p>
+                              {pr.requires8130 && (
+                                <button
+                                  className={`mt-0.5 flex items-center gap-0.5 text-xs font-medium ${pr.has8130 ? 'text-intent-success' : 'text-intent-warning'}`}
+                                  onClick={() => toggle8130({ partId: pr.id, has8130: !pr.has8130 })}
+                                  title={pr.has8130 ? 'Click to unmark 8130 received' : 'Click to mark 8130 received'}
+                                >
+                                  <ShieldCheck className="h-3 w-3" />
+                                  {pr.has8130 ? '8130 ✓' : '8130 needed'}
+                                </button>
+                              )}
+                            </td>
                             <td className="py-2.5 px-4 text-xs text-content-primary">{pr.description}</td>
                             <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.qty}</td>
                             <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{pr.unitCost ? formatCurrency(pr.unitCost) : '—'}</td>
@@ -660,7 +706,7 @@ export default function WorkOrderDetailPage() {
                               </Badge>
                             </td>
                             <td className="py-2.5 px-4">
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 flex-wrap">
                                 {pr.status === 'REQUESTED' && (
                                   <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-intent-warning hover:text-intent-warning" onClick={() => updatePartStatus({ partRequestId: pr.id, status: 'ON_ORDER' })}>
                                     <Package className="h-3 w-3" />Order
@@ -676,6 +722,20 @@ export default function WorkOrderDetailPage() {
                                     <Hammer className="h-3 w-3" />Install
                                   </Button>
                                 )}
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="h-7 text-xs gap-1 text-content-muted hover:text-intent-primary"
+                                  onClick={() => { setWVendor(''); setWMonths('12'); setWInstallDate(''); setWClaimStatus('NONE'); setWClaimRef(''); setWNotes(''); setWarrantyPartId(pr.id); }}
+                                >
+                                  <ShieldCheck className="h-3 w-3" />Warranty
+                                </Button>
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="h-7 text-xs gap-1 text-content-muted hover:text-intent-primary"
+                                  onClick={() => { setCrPartNumber(pr.partNumber); setCrDescription(pr.description); setCrValue(''); setCrVendor(''); setCrDueDate(''); setCrTracking(''); setCrNotes(''); setCoreReturnPartId(pr.id); }}
+                                >
+                                  <RotateCcw className="h-3 w-3" />Core
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -1011,6 +1071,163 @@ export default function WorkOrderDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Warranty Dialog */}
+      <Dialog open={!!warrantyPartId} onOpenChange={(v) => !v && setWarrantyPartId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Warranty Record</DialogTitle>
+            <DialogDescription>Log warranty details for this part</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Vendor *</Label>
+                <Input value={wVendor} onChange={e => setWVendor(e.target.value)} className="h-8 text-sm" placeholder="Supplier name" autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Warranty Months *</Label>
+                <Input type="number" min="1" value={wMonths} onChange={e => setWMonths(e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Install Date</Label>
+              <Input type="date" value={wInstallDate} onChange={e => setWInstallDate(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Claim Status</Label>
+              <Select value={wClaimStatus} onValueChange={setWClaimStatus}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['NONE', 'PENDING', 'APPROVED', 'DENIED', 'REPLACED'].map(s => (
+                    <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {wClaimStatus !== 'NONE' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Claim Ref #</Label>
+                <Input value={wClaimRef} onChange={e => setWClaimRef(e.target.value)} className="h-8 text-sm font-mono" placeholder="Claim / RMA number" />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Input value={wNotes} onChange={e => setWNotes(e.target.value)} className="h-8 text-sm" placeholder="Optional notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWarrantyPartId(null)}>Cancel</Button>
+            <Button
+              disabled={!wVendor.trim() || !wMonths || wSaving}
+              className="gap-2"
+              onClick={async () => {
+                if (!warrantyPartId) return;
+                setWSaving(true);
+                try {
+                  await fetch(`/api/work-orders/${workOrderId}/parts/${warrantyPartId}/warranty`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      vendor: wVendor,
+                      warrantyMonths: parseInt(wMonths),
+                      installDate: wInstallDate || undefined,
+                      claimStatus: wClaimStatus,
+                      claimRef: wClaimRef || undefined,
+                      notes: wNotes || undefined,
+                    }),
+                  });
+                  setWarrantyPartId(null);
+                } finally {
+                  setWSaving(false);
+                }
+              }}
+            >
+              {wSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Warranty
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Core Return Dialog */}
+      <Dialog open={!!coreReturnPartId} onOpenChange={(v) => !v && setCoreReturnPartId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Core Return</DialogTitle>
+            <DialogDescription>Track core charge and return for this part</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Core Part # *</Label>
+                <Input value={crPartNumber} onChange={e => setCrPartNumber(e.target.value)} className="h-8 text-sm font-mono" autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Vendor *</Label>
+                <Input value={crVendor} onChange={e => setCrVendor(e.target.value)} className="h-8 text-sm" placeholder="Supplier name" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Core Description</Label>
+              <Input value={crDescription} onChange={e => setCrDescription(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Core Value *</Label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-content-muted">$</span>
+                  <Input type="number" step="0.01" min="0" value={crValue} onChange={e => setCrValue(e.target.value)} className="h-8 text-sm font-mono pl-5" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Return Due Date</Label>
+                <Input type="date" value={crDueDate} onChange={e => setCrDueDate(e.target.value)} className="h-8 text-sm" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tracking Number</Label>
+              <Input value={crTracking} onChange={e => setCrTracking(e.target.value)} className="h-8 text-sm font-mono" placeholder="Shipping tracking #" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Input value={crNotes} onChange={e => setCrNotes(e.target.value)} className="h-8 text-sm" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCoreReturnPartId(null)}>Cancel</Button>
+            <Button
+              disabled={!crPartNumber.trim() || !crVendor.trim() || !crValue || crSaving}
+              className="gap-2"
+              onClick={async () => {
+                if (!coreReturnPartId) return;
+                setCrSaving(true);
+                try {
+                  await fetch(`/api/work-orders/${workOrderId}/parts/${coreReturnPartId}/core-return`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      corePartNumber: crPartNumber,
+                      coreDescription: crDescription || undefined,
+                      coreValue: parseFloat(crValue),
+                      vendor: crVendor,
+                      returnDueDate: crDueDate || undefined,
+                      trackingNumber: crTracking || undefined,
+                      notes: crNotes || undefined,
+                    }),
+                  });
+                  setCoreReturnPartId(null);
+                } finally {
+                  setCrSaving(false);
+                }
+              }}
+            >
+              {crSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Core Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Task Card Confirm */}
       <AlertDialog open={!!deleteLineItemId} onOpenChange={(v) => !v && setDeleteLineItemId(null)}>

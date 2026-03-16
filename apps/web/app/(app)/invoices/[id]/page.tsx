@@ -228,11 +228,15 @@ export default function InvoiceDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-4 text-sm border-t border-surface-hover pt-4">
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-surface-hover pt-4">
                 <div>
                   <p className="text-xs text-content-muted">Customer</p>
                   <p className="text-content-primary font-medium">{inv.customer.name}</p>
                   {inv.customer.accountNumber && <p className="text-xs text-content-muted">{inv.customer.accountNumber}</p>}
+                </div>
+                <div>
+                  <p className="text-xs text-content-muted">Billing Terms</p>
+                  <p className="text-content-primary">{inv.customer.billingTerms?.replace('_', ' ') ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-content-muted">Issue Date</p>
@@ -240,7 +244,9 @@ export default function InvoiceDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-content-muted">Due Date</p>
-                  <p className="text-content-primary">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</p>
+                  <p className={`font-medium ${inv.status === 'OVERDUE' ? 'text-intent-danger' : 'text-content-primary'}`}>
+                    {inv.dueDate ? formatDate(inv.dueDate) : '—'}
+                  </p>
                 </div>
               </div>
             </CardContent>

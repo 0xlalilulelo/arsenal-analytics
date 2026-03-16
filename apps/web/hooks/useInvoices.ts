@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export type InvoiceDetail = {
   id: string;
   invoiceNumber: string;
-  customer: { name: string; accountNumber: string | null };
+  customer: { name: string; accountNumber: string | null; billingTerms: string | null };
   workOrder: { id: string; number: string } | null;
   status: string;
   issueDate: string;
