@@ -29,3 +29,40 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ data: aircraft });
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { nNumber, customerId, make, model, serial, year, ttsn, engineTtsn, propTtsn } = body;
+
+    if (!nNumber?.trim() || !customerId || !make?.trim() || !model?.trim() || !serial?.trim()) {
+      return NextResponse.json({ error: 'nNumber, customerId, make, model, and serial are required' }, { status: 422 });
+    }
+
+    const aircraft = await prisma.aircraft.create({
+      data: {
+        nNumber: nNumber.trim().toUpperCase(),
+        customerId,
+        make: make.trim(),
+        model: model.trim(),
+        serial: serial.trim(),
+        year: year ? parseInt(year) : null,
+        ttsn: ttsn !== '' && ttsn != null ? parseFloat(ttsn) : null,
+        engineTtsn: engineTtsn !== '' && engineTtsn != null ? parseFloat(engineTtsn) : null,
+        propTtsn: propTtsn !== '' && propTtsn != null ? parseFloat(propTtsn) : null,
+      },
+      include: {
+        customer: { select: { id: true, name: true, accountNumber: true } },
+        _count: { select: { workOrders: true } },
+      },
+    });
+
+    return NextResponse.json({ data: aircraft }, { status: 201 });
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      return NextResponse.json({ error: 'An aircraft with this N-Number already exists' }, { status: 409 });
+    }
+    console.error(e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

@@ -11,8 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
@@ -21,8 +24,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
-  PackageCheck, Hammer,
+  PackageCheck, Hammer, Pencil, Trash2,
 } from 'lucide-react';
+
+const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
+const LINE_ITEM_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETE', 'AWAITING_INSPECTION', 'SIGNED_OFF'];
 
 const SHOP_SUPPLIES_PCT = 0.035;
 
@@ -44,6 +50,20 @@ export default function WorkOrderDetailPage() {
   const [milestoneOpen, setMilestoneOpen] = useState(false);
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [woEditOpen, setWoEditOpen] = useState(false);
+  const [deleteComplianceId, setDeleteComplianceId] = useState<string | null>(null);
+  const [editLaborEntry, setEditLaborEntry] = useState<{ id: string; hours: number; description: string | null; billable: boolean; date: string } | null>(null);
+  const [deleteLaborId, setDeleteLaborId] = useState<string | null>(null);
+
+  // WO edit form state
+  const [woNotes, setWoNotes] = useState('');
+  const [woInternalNotes, setWoInternalNotes] = useState('');
+  const [woEstClose, setWoEstClose] = useState('');
+
+  // Edit labor form state
+  const [editLaborHours, setEditLaborHours] = useState('');
+  const [editLaborDesc, setEditLaborDesc] = useState('');
+  const [editLaborBillable, setEditLaborBillable] = useState(true);
 
   // Add Task form state
   const [atDescription, setAtDescription] = useState('');
@@ -139,6 +159,95 @@ export default function WorkOrderDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
   });
 
+  const { mutateAsync: updateWoStatus } = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: updateLineItemStatus } = useMutation({
+    mutationFn: async ({ lineItemId, status }: { lineItemId: string; status: string }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/line-items/${lineItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Failed to update task status');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: markComplianceComplete } = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/compliance/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completedAt: new Date().toISOString() }),
+      });
+      if (!res.ok) throw new Error('Failed to mark complete');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: deleteComplianceItem } = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/compliance/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: updateWo, isPending: updatingWo } = useMutation({
+    mutationFn: async (data: { notes?: string; internalNotes?: string; estimatedClose?: string | null }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update work order');
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['work-order', workOrderId] });
+      setWoEditOpen(false);
+    },
+  });
+
+  const { mutateAsync: updateLaborEntry, isPending: updatingLabor } = useMutation({
+    mutationFn: async ({ id, hours, description, billable }: { id: string; hours: number; description: string; billable: boolean }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/labor/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours, description, billable }),
+      });
+      if (!res.ok) throw new Error('Failed to update labor entry');
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['work-order', workOrderId] });
+      setEditLaborEntry(null);
+    },
+  });
+
+  const { mutateAsync: deleteLaborEntry } = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/labor/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete labor entry');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
   const { mutateAsync: generateInvoice, isPending: invoicePending } = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/invoices', {
@@ -216,6 +325,27 @@ export default function WorkOrderDetailPage() {
                 <ChevronLeft className="h-3.5 w-3.5" />All Work Orders
               </Button>
             </Link>
+            <Select value={wo.status} onValueChange={updateWoStatus}>
+              <SelectTrigger className="h-8 text-xs w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WO_STATUSES.map(s => (
+                  <SelectItem key={s} value={s} className="text-xs">{s.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost" size="sm" className="h-8 text-xs gap-1"
+              onClick={() => {
+                setWoNotes(wo.notes ?? '');
+                setWoInternalNotes((wo as any).internalNotes ?? '');
+                setWoEstClose(wo.estimatedClose ? wo.estimatedClose.slice(0, 10) : '');
+                setWoEditOpen(true);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />Edit
+            </Button>
             <Button
               variant={pendingSquawks.length > 0 ? 'warning' : 'outline'}
               size="sm"
@@ -371,9 +501,19 @@ export default function WorkOrderDetailPage() {
                                   {actualH > 0 ? formatCurrency(actualH * li.laborRate) : '—'}
                                 </td>
                                 <td className="py-2.5 px-4">
-                                  <Badge variant={li.status === 'COMPLETE' ? 'complete' : li.status === 'IN_PROGRESS' ? 'in-progress' : 'open'}>
-                                    {li.status}
-                                  </Badge>
+                                  <Select
+                                    value={li.status}
+                                    onValueChange={(s) => updateLineItemStatus({ lineItemId: li.id, status: s })}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs w-40 border-surface-hover">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {LINE_ITEM_STATUSES.map(s => (
+                                        <SelectItem key={s} value={s} className="text-xs">{s.replace(/_/g, ' ')}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </td>
                               </tr>
                             );
@@ -408,14 +548,15 @@ export default function WorkOrderDetailPage() {
                         <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Rate</th>
                         <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Amount</th>
                         <th className="py-2.5 px-4 text-xs font-semibold text-content-muted">Billable</th>
+                        <th className="py-2.5 px-4" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-hover">
                       {wo.laborEntries.length === 0 && (
-                        <tr><td colSpan={7} className="py-8 text-center text-xs text-content-muted">No labor entries yet. Click "Log Time" to add.</td></tr>
+                        <tr><td colSpan={8} className="py-8 text-center text-xs text-content-muted">No labor entries yet. Click "Log Time" to add.</td></tr>
                       )}
                       {wo.laborEntries.map(entry => (
-                        <tr key={entry.id} className="hover:bg-surface-hover/30">
+                        <tr key={entry.id} className="hover:bg-surface-hover/30 group">
                           <td className="py-2.5 px-4 font-mono text-xs text-content-secondary">{formatDate(entry.date)}</td>
                           <td className="py-2.5 px-4 text-xs text-content-primary">{entry.technician.name}</td>
                           <td className="py-2.5 px-4 text-xs text-content-secondary max-w-xs truncate">{entry.description ?? '—'}</td>
@@ -426,6 +567,27 @@ export default function WorkOrderDetailPage() {
                             {entry.billable
                               ? <CheckCircle2 className="h-4 w-4 text-intent-success" />
                               : <span className="text-xs text-content-muted">Non-billable</span>}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost" size="sm" className="h-6 w-6 p-0 text-content-muted hover:text-content-primary"
+                                onClick={() => {
+                                  setEditLaborEntry({ id: entry.id, hours: entry.hours, description: entry.description, billable: entry.billable, date: entry.date });
+                                  setEditLaborHours(entry.hours.toString());
+                                  setEditLaborDesc(entry.description ?? '');
+                                  setEditLaborBillable(entry.billable);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm" className="h-6 w-6 p-0 text-content-muted hover:text-intent-danger"
+                                onClick={() => setDeleteLaborId(entry.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -578,10 +740,23 @@ export default function WorkOrderDetailPage() {
                         </div>
                         <p className="text-sm text-content-primary">{item.description}</p>
                       </div>
-                      <div className="ml-4 shrink-0">
+                      <div className="ml-4 shrink-0 flex items-center gap-2">
                         {item.completedAt
                           ? <span className="flex items-center gap-1 text-xs text-intent-success"><CheckCircle2 className="h-3.5 w-3.5" />Complied {formatDate(item.completedAt)}</span>
-                          : <span className="flex items-center gap-1 text-xs text-intent-warning"><Clock className="h-3.5 w-3.5" />Pending</span>}
+                          : (
+                            <Button
+                              variant="outline" size="sm" className="h-7 text-xs gap-1"
+                              onClick={() => markComplianceComplete(item.id)}
+                            >
+                              <CheckCircle2 className="h-3 w-3" />Mark Complete
+                            </Button>
+                          )}
+                        <Button
+                          variant="ghost" size="sm" className="h-7 w-7 p-0 text-content-muted hover:text-intent-danger"
+                          onClick={() => setDeleteComplianceId(item.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -620,6 +795,161 @@ export default function WorkOrderDetailPage() {
         workOrderNumber={wo.number}
         workOrderId={wo.id}
       />
+
+      {/* WO Edit Dialog */}
+      <Dialog open={woEditOpen} onOpenChange={setWoEditOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Work Order</DialogTitle>
+            <DialogDescription>{wo?.number} — update notes and dates</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Est. Close Date</Label>
+              <Input
+                type="date"
+                value={woEstClose}
+                onChange={e => setWoEstClose(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Customer Notes</Label>
+              <Textarea
+                value={woNotes}
+                onChange={e => setWoNotes(e.target.value)}
+                placeholder="Notes visible to customer…"
+                className="text-sm min-h-[72px] resize-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Internal Notes</Label>
+              <Textarea
+                value={woInternalNotes}
+                onChange={e => setWoInternalNotes(e.target.value)}
+                placeholder="Internal shop notes…"
+                className="text-sm min-h-[60px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWoEditOpen(false)}>Cancel</Button>
+            <Button
+              disabled={updatingWo}
+              onClick={() => updateWo({
+                notes: woNotes || undefined,
+                internalNotes: woInternalNotes || undefined,
+                estimatedClose: woEstClose || null,
+              })}
+              className="gap-2"
+            >
+              {updatingWo && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Labor Entry Dialog */}
+      <Dialog open={!!editLaborEntry} onOpenChange={(v) => !v && setEditLaborEntry(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Labor Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hours</Label>
+              <Input
+                type="number"
+                step="0.25"
+                min="0.25"
+                value={editLaborHours}
+                onChange={e => setEditLaborHours(e.target.value)}
+                className="h-8 text-sm font-mono"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Input
+                value={editLaborDesc}
+                onChange={e => setEditLaborDesc(e.target.value)}
+                className="h-8 text-sm"
+                placeholder="Work performed…"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={editLaborBillable}
+                onChange={e => setEditLaborBillable(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-xs text-content-primary">Billable</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditLaborEntry(null)}>Cancel</Button>
+            <Button
+              disabled={updatingLabor || !editLaborHours}
+              onClick={() => updateLaborEntry({
+                id: editLaborEntry!.id,
+                hours: parseFloat(editLaborHours),
+                description: editLaborDesc,
+                billable: editLaborBillable,
+              })}
+              className="gap-2"
+            >
+              {updatingLabor && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Labor Entry Confirm */}
+      <AlertDialog open={!!deleteLaborId} onOpenChange={(v) => !v && setDeleteLaborId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Labor Entry?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove the time log entry. This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-intent-danger hover:bg-intent-danger/90 text-white"
+              onClick={async () => {
+                if (deleteLaborId) await deleteLaborEntry(deleteLaborId);
+                setDeleteLaborId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Compliance Item Confirm */}
+      <AlertDialog open={!!deleteComplianceId} onOpenChange={(v) => !v && setDeleteComplianceId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Compliance Item?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove this compliance record. This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-intent-danger hover:bg-intent-danger/90 text-white"
+              onClick={async () => {
+                if (deleteComplianceId) await deleteComplianceItem(deleteComplianceId);
+                setDeleteComplianceId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Task Dialog */}
       <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>

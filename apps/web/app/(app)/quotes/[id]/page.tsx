@@ -8,14 +8,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useQuoteDetail, useUpdateQuote, useSendQuote, useConvertQuote } from '@/hooks/useQuotes';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
   ChevronLeft, Send, CheckCircle2, XCircle, ArrowRight, Loader2,
-  Plane, Clock, FileText, DollarSign, AlertTriangle, Copy, ExternalLink, Printer,
+  Plane, Clock, FileText, DollarSign, AlertTriangle, Copy, ExternalLink, Printer, Pencil,
 } from 'lucide-react';
+
+const BILLING_MODELS = ['TIME_AND_MATERIALS', 'FLAT_RATE', 'HYBRID', 'NOT_TO_EXCEED', 'COST_PLUS'];
 
 const CATEGORY_COLOR: Record<string, string> = {
   LABOR:         'text-intent-primary',
@@ -45,6 +49,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const { mutateAsync: sendQuote, isPending: sendPending } = useSendQuote(id);
   const { mutateAsync: convertQuote, isPending: convertPending } = useConvertQuote(id);
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState('');
+  const [editBillingModel, setEditBillingModel] = useState('');
+  const [editNte, setEditNte] = useState('');
+  const [editValidDays, setEditValidDays] = useState('');
+  const [editDepositPct, setEditDepositPct] = useState('');
+  const [editPending, setEditPending] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
@@ -138,6 +149,21 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             <Button size="sm" variant="ghost" className="h-8 text-xs gap-1" onClick={() => window.open(`/print/quotes/${id}`, '_blank')}>
               <Printer className="h-3.5 w-3.5" />Print
             </Button>
+            {['DRAFT', 'SENT', 'VIEWED'].includes(quote.status) && (
+              <Button
+                size="sm" variant="ghost" className="h-8 text-xs gap-1"
+                onClick={() => {
+                  setEditNotes(quote.notes ?? '');
+                  setEditBillingModel(quote.billingModel);
+                  setEditNte(quote.nteAmount?.toString() ?? '');
+                  setEditValidDays(quote.validDays?.toString() ?? '30');
+                  setEditDepositPct((Math.round(quote.depositPct * 100)).toString());
+                  setEditOpen(true);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />Edit
+              </Button>
+            )}
             {canSend && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setSendOpen(true)} disabled={sendPending}>
                 <Send className="h-3.5 w-3.5" />Send to Customer
@@ -527,6 +553,96 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             <Button onClick={handleConvert} disabled={convertPending} className="gap-2">
               {convertPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Create Work Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Quote Dialog ─────────────────────────────────── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Quote</DialogTitle>
+            <DialogDescription>{quote.number} — update terms and notes</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Billing Model</Label>
+              <Select value={editBillingModel} onValueChange={setEditBillingModel}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BILLING_MODELS.map(m => (
+                    <SelectItem key={m} value={m} className="text-xs">{m.replace(/_/g, ' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Valid For (days)</Label>
+                <Input
+                  type="number" min="1"
+                  value={editValidDays}
+                  onChange={e => setEditValidDays(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Deposit %</Label>
+                <Input
+                  type="number" min="0" max="100"
+                  value={editDepositPct}
+                  onChange={e => setEditDepositPct(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+            {editBillingModel === 'NOT_TO_EXCEED' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">NTE Cap ($)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={editNte}
+                  onChange={e => setEditNte(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Textarea
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                placeholder="Scope of work, exclusions, assumptions…"
+                className="text-sm min-h-[72px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button
+              disabled={editPending}
+              onClick={async () => {
+                setEditPending(true);
+                try {
+                  await updateQuote({
+                    billingModel: editBillingModel,
+                    validDays: editValidDays ? parseInt(editValidDays) : undefined,
+                    depositPct: editDepositPct ? parseFloat(editDepositPct) / 100 : undefined,
+                    nteAmount: editNte ? parseFloat(editNte) : null,
+                    notes: editNotes || null,
+                  });
+                  setEditOpen(false);
+                } finally {
+                  setEditPending(false);
+                }
+              }}
+              className="gap-2"
+            >
+              {editPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

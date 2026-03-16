@@ -163,6 +163,120 @@ function AddPartDialog({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
+// ── Edit Part dialog ───────────────────────────────────────────────────────────
+function EditPartDialog({ part, onClose }: { part: PartRow | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    description: '', manufacturer: '', category: '',
+    unitCost: '', markupPct: '', bin: '', notes: '',
+    reorderPoint: '', reorderQty: '',
+  });
+  const [error, setError] = useState('');
+
+  // Sync form when part changes
+  if (part && form.description !== part.description && !error) {
+    setForm({
+      description: part.description,
+      manufacturer: (part as any).manufacturer ?? '',
+      category: (part as any).category ?? '',
+      unitCost: part.unitCost.toString(),
+      markupPct: (part.markupPct * 100).toFixed(1),
+      bin: (part as any).bin ?? '',
+      notes: (part as any).notes ?? '',
+      reorderPoint: (part as any).reorderPoint?.toString() ?? '',
+      reorderQty: (part as any).reorderQty?.toString() ?? '',
+    });
+  }
+
+  const { mutateAsync: save, isPending } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/parts/${part!.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: form.description.trim(),
+          manufacturer: form.manufacturer.trim() || null,
+          category: form.category.trim() || null,
+          unitCost: parseFloat(form.unitCost),
+          markupPct: parseFloat(form.markupPct) / 100,
+          bin: form.bin.trim() || null,
+          notes: form.notes.trim() || null,
+          reorderPoint: form.reorderPoint ? parseInt(form.reorderPoint) : null,
+          reorderQty: form.reorderQty ? parseInt(form.reorderQty) : null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['parts'] });
+      onClose();
+    },
+    onError: (e) => setError((e as Error).message),
+  });
+
+  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(prev => ({ ...prev, [k]: e.target.value }));
+
+  return (
+    <Dialog open={!!part} onOpenChange={(v: boolean) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Edit Part — {part?.partNumber}</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-2 gap-3 py-1">
+          <div className="col-span-2">
+            <Label className="text-xs">Description *</Label>
+            <Input value={form.description} onChange={f('description')} className="mt-1.5 h-8 text-sm" autoFocus />
+          </div>
+          <div>
+            <Label className="text-xs">Manufacturer</Label>
+            <Input value={form.manufacturer} onChange={f('manufacturer')} className="mt-1.5 h-8 text-sm" placeholder="Boeing, Cessna…" />
+          </div>
+          <div>
+            <Label className="text-xs">Category</Label>
+            <Input value={form.category} onChange={f('category')} className="mt-1.5 h-8 text-sm" placeholder="Engine, Avionics…" />
+          </div>
+          <div>
+            <Label className="text-xs">Unit Cost ($)</Label>
+            <Input type="number" step="0.01" min="0" value={form.unitCost} onChange={f('unitCost')} className="mt-1.5 h-8 text-sm font-mono" />
+          </div>
+          <div>
+            <Label className="text-xs">Markup %</Label>
+            <Input type="number" step="0.1" min="0" value={form.markupPct} onChange={f('markupPct')} className="mt-1.5 h-8 text-sm font-mono" />
+          </div>
+          <div>
+            <Label className="text-xs">Bin Location</Label>
+            <Input value={form.bin} onChange={f('bin')} className="mt-1.5 h-8 text-sm font-mono" placeholder="A-12-3" />
+          </div>
+          <div>
+            <Label className="text-xs">Reorder Point</Label>
+            <Input type="number" min="0" value={form.reorderPoint} onChange={f('reorderPoint')} className="mt-1.5 h-8 text-sm font-mono" />
+          </div>
+          <div>
+            <Label className="text-xs">Reorder Qty</Label>
+            <Input type="number" min="1" value={form.reorderQty} onChange={f('reorderQty')} className="mt-1.5 h-8 text-sm font-mono" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Notes</Label>
+            <Input value={form.notes} onChange={f('notes')} className="mt-1.5 h-8 text-sm" />
+          </div>
+        </div>
+        {error && <p className="text-xs text-intent-danger">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose}>Cancel</Button>
+          <Button
+            size="sm" className="h-8 text-xs gap-1.5"
+            onClick={() => save()}
+            disabled={isPending || !form.description.trim()}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Stock adjustment dialog ────────────────────────────────────────────────────
 function AdjustStockDialog({ part, onClose }: { part: PartRow | null; onClose: () => void }) {
   const qc = useQueryClient();
@@ -267,6 +381,7 @@ export default function PartsPage() {
   const [newPOOpen, setNewPOOpen] = useState(false);
   const [addPartOpen, setAddPartOpen] = useState(false);
   const [adjustPart, setAdjustPart] = useState<PartRow | null>(null);
+  const [editPart, setEditPart] = useState<PartRow | null>(null);
   const [poVendor, setPOVendor] = useState('');
   const [poNotes, setPONotes] = useState('');
 
@@ -429,6 +544,7 @@ export default function PartsPage() {
               <PartsTable
                 parts={parts}
                 onAdjustStock={setAdjustPart}
+                onEdit={setEditPart}
               />
             )}
           </TabsContent>
@@ -450,6 +566,9 @@ export default function PartsPage() {
 
       {/* Add Part dialog */}
       <AddPartDialog open={addPartOpen} onClose={() => setAddPartOpen(false)} />
+
+      {/* Edit Part dialog */}
+      <EditPartDialog part={editPart} onClose={() => setEditPart(null)} />
 
       {/* Adjust Stock dialog */}
       <AdjustStockDialog part={adjustPart} onClose={() => setAdjustPart(null)} />

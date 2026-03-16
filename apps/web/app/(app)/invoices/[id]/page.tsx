@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
 import { useCurrentUser } from '@/hooks/use-current-user';
-import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer, Ban } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
   LABOR: 'Labor', PARTS: 'Parts', SHOP_SUPPLIES: 'Shop Supplies',
@@ -32,6 +33,7 @@ export default function InvoiceDetailPage() {
   const { mutateAsync: updateInvoice, isPending: sendPending } = useUpdateInvoice(id);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CHECK');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
@@ -120,13 +122,22 @@ export default function InvoiceDetailPage() {
                 const result = await updateInvoice({ status: 'SENT' }) as any;
                 if (result?.portalUrl) setPortalUrl(result.portalUrl);
               }}
-              disabled={sendPending || inv.status === 'PAID' || inv.status === 'SENT'}
+              disabled={sendPending || inv.status === 'PAID' || inv.status === 'SENT' || inv.status === 'VOID'}
             >
               {sendPending
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Send className="h-3.5 w-3.5" />}
               {inv.status === 'SENT' ? 'Sent' : 'Send Invoice'}
             </Button>}
+            {userCan.sendInvoice() && !['PAID', 'VOID'].includes(inv.status) && (
+              <Button
+                variant="ghost" size="sm"
+                className="gap-1 h-8 text-xs text-intent-danger hover:text-intent-danger hover:bg-intent-danger/10"
+                onClick={() => setVoidOpen(true)}
+              >
+                <Ban className="h-3.5 w-3.5" />Void
+              </Button>
+            )}
           </div>
         }
       />
@@ -276,6 +287,29 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
       </div>
+
+      <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void Invoice {inv.invoiceNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the invoice as void and remove it from AR. This action cannot be undone. Any recorded payments will remain in the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-intent-danger hover:bg-intent-danger/90 text-white"
+              onClick={async () => {
+                await updateInvoice({ status: 'VOID' });
+                setVoidOpen(false);
+              }}
+            >
+              Void Invoice
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent>
