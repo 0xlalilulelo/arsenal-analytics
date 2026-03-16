@@ -12,6 +12,7 @@
     "db:seed": "turbo db:seed",
     "db:deploy": "pnpm --filter @mro/db exec prisma migrate deploy",
     "db:studio": "cd packages/db && pnpm prisma studio",
+    "dev:web": "pnpm --filter @mro/web dev",
     "mobile": "pnpm --filter @mro/mobile dev"
   },
   "devDependencies": {
