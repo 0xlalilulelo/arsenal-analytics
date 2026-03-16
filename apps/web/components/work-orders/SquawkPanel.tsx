@@ -3,10 +3,14 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { FileUpload, FileList } from '@/components/ui/file-upload';
 import { formatCurrency } from '@/lib/utils';
 import { useSquawkApproval } from '@/hooks/useWorkOrders';
-import { CheckCircle2, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, XCircle, AlertTriangle, Clock, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
 
 export interface Squawk {
   id: string;
@@ -166,10 +170,16 @@ function SquawkCard({ squawk, workOrderId, onApprove, onDecline, onDefer }: {
   );
 }
 
+const EMPTY_FORM = { desc: '', isAW: false, estLabor: '', estParts: '' };
+
 export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrderId }: SquawkPanelProps) {
   const [localSquawks, setLocalSquawks] = useState(squawks);
   const [sentRequest, setSentRequest] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [reporting, setReporting] = useState(false);
   const { mutateAsync: updateSquawk } = useSquawkApproval(workOrderId);
+  const qc = useQueryClient();
 
   useEffect(() => { setLocalSquawks(squawks); }, [squawks]);
 
@@ -209,23 +219,130 @@ export function SquawkPanel({ open, onClose, squawks, workOrderNumber, workOrder
     }
   };
 
+  const handleReport = async () => {
+    if (!form.desc.trim()) return;
+    setReporting(true);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/squawks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: form.desc.trim(),
+          isAirworthiness: form.isAW,
+          estLaborHours: form.estLabor ? parseFloat(form.estLabor) : undefined,
+          estPartsTotal: form.estParts ? parseFloat(form.estParts) : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create squawk');
+      await qc.invalidateQueries({ queryKey: ['work-order', workOrderId] });
+      setForm(EMPTY_FORM);
+      setReportOpen(false);
+    } finally {
+      setReporting(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Squawk Approvals</SheetTitle>
-          <SheetDescription>
-            {workOrderNumber} · {pendingCount} pending approval
-            {airworthinessCount > 0 && (
-              <span className="ml-2 text-intent-danger font-semibold">
-                {airworthinessCount} airworthiness item{airworthinessCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </SheetDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <SheetTitle>Squawks</SheetTitle>
+              <SheetDescription>
+                {workOrderNumber} · {pendingCount} pending approval
+                {airworthinessCount > 0 && (
+                  <span className="ml-2 text-intent-danger font-semibold">
+                    {airworthinessCount} airworthiness item{airworthinessCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </SheetDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 h-8 text-xs shrink-0"
+              onClick={() => setReportOpen(v => !v)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Report Squawk
+            </Button>
+          </div>
         </SheetHeader>
 
+        {/* Report Squawk inline form */}
+        {reportOpen && (
+          <div className="mb-4 rounded-lg border border-surface-hover bg-surface-card p-4 space-y-3">
+            <p className="text-xs font-semibold text-content-primary uppercase tracking-wider">New Squawk</p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description *</Label>
+              <Textarea
+                value={form.desc}
+                onChange={e => setForm(f => ({ ...f, desc: e.target.value }))}
+                placeholder="Describe the issue or discrepancy found…"
+                className="text-sm min-h-[72px] resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Est. Labor (h)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="optional"
+                  value={form.estLabor}
+                  onChange={e => setForm(f => ({ ...f, estLabor: e.target.value }))}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Est. Parts ($)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="optional"
+                  value={form.estParts}
+                  onChange={e => setForm(f => ({ ...f, estParts: e.target.value }))}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.isAW}
+                onChange={e => setForm(f => ({ ...f, isAW: e.target.checked }))}
+                className="rounded border-surface-hover"
+              />
+              <span className="text-xs text-content-primary">Airworthiness item — aircraft cannot fly until resolved</span>
+            </label>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1"
+                disabled={!form.desc.trim() || reporting}
+                onClick={handleReport}
+              >
+                {reporting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Submit Squawk
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => { setReportOpen(false); setForm(EMPTY_FORM); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
-          {localSquawks.length === 0 && (
+          {localSquawks.length === 0 && !reportOpen && (
             <p className="text-sm text-content-muted py-8 text-center">No squawks recorded for this work order.</p>
           )}
           {localSquawks.map(squawk => (

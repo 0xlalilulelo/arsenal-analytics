@@ -43,6 +43,12 @@ export default function WorkOrderDetailPage() {
   const [requestPartOpen, setRequestPartOpen] = useState(false);
   const [milestoneOpen, setMilestoneOpen] = useState(false);
   const [complianceOpen, setComplianceOpen] = useState(false);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
+
+  // Add Task form state
+  const [atDescription, setAtDescription] = useState('');
+  const [atEstHours, setAtEstHours] = useState('');
+  const [atReferenceDoc, setAtReferenceDoc] = useState('');
 
   // Request Part form state
   const [rpPartNumber, setRpPartNumber] = useState('');
@@ -115,6 +121,19 @@ export default function WorkOrderDetailPage() {
         body: JSON.stringify({ workOrderId, ...data }),
       });
       if (!res.ok) throw new Error('Failed to add compliance item');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: addTask, isPending: addingTask } = useMutation({
+    mutationFn: async (data: { description: string; estHours: number; referenceDoc?: string }) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/line-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add task');
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
@@ -315,7 +334,12 @@ export default function WorkOrderDetailPage() {
                 </Card>
 
                 <Card className="lg:col-span-2">
-                  <CardHeader><CardTitle className="text-sm">Task Cards</CardTitle></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <CardTitle className="text-sm">Task Cards</CardTitle>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setAddTaskOpen(true)}>
+                      <span className="text-base leading-none">+</span> Add Task
+                    </Button>
+                  </CardHeader>
                   <CardContent className="p-0">
                     {wo.lineItems.length === 0 ? (
                       <p className="text-sm text-content-muted p-4">No task cards added yet.</p>
@@ -596,6 +620,70 @@ export default function WorkOrderDetailPage() {
         workOrderNumber={wo.number}
         workOrderId={wo.id}
       />
+
+      {/* Add Task Dialog */}
+      <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Task Card</DialogTitle>
+            <DialogDescription>Add a new task to {wo?.number}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description *</Label>
+              <Input
+                value={atDescription}
+                onChange={e => setAtDescription(e.target.value)}
+                placeholder="Inspect fuel system, Replace O-rings…"
+                className="h-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Est. Hours</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="0.0"
+                  value={atEstHours}
+                  onChange={e => setAtEstHours(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Reference Doc</Label>
+                <Input
+                  value={atReferenceDoc}
+                  onChange={e => setAtReferenceDoc(e.target.value)}
+                  placeholder="AMM 28-10-00"
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddTaskOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!atDescription.trim() || addingTask}
+              onClick={async () => {
+                await addTask({
+                  description: atDescription.trim(),
+                  estHours: atEstHours ? parseFloat(atEstHours) : 0,
+                  referenceDoc: atReferenceDoc.trim() || undefined,
+                });
+                setAtDescription(''); setAtEstHours(''); setAtReferenceDoc('');
+                setAddTaskOpen(false);
+              }}
+              className="gap-2"
+            >
+              {addingTask && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <LogTimeDialog
         open={logTimeOpen}
