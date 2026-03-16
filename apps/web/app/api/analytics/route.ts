@@ -82,20 +82,42 @@ export async function GET(_req: NextRequest) {
   const avgInvoiceAgeDays = agingCount > 0 ? Math.round(agingDaysSum / agingCount) : null;
   const techsOnJobsCount = techsToday.length;
 
-  // 12-month revenue sparkline — parallel queries
-  const monthPromises = Array.from({ length: 12 }, (_, i) => {
-    const idx = 11 - i;
-    const start = new Date(now.getFullYear(), now.getMonth() - idx, 1);
-    const end = new Date(now.getFullYear(), now.getMonth() - idx + 1, 0);
-    return prisma.invoice.aggregate({
-      _sum: { total: true },
-      where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'PAID'] }, issueDate: { gte: start, lte: end } },
-    }).then(r => ({
-      month: start.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-      revenue: Number(r._sum.total ?? 0),
-    }));
+  // 12-month revenue trend: prefer FPASnapshot for past months (already captured),
+  // fall back to live Invoice aggregation for any month without a snapshot.
+  const twelveMonthKeys = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    return {
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      start: d,
+      end: new Date(d.getFullYear(), d.getMonth() + 1, 0),
+    };
   });
-  const monthlyRevenue = await Promise.all(monthPromises);
+
+  const fpaSnapshots = await prisma.fPASnapshot.findMany({
+    where: { orgId, month: { in: twelveMonthKeys.map(m => m.key) } },
+    select: { month: true, revenue: true, laborBilled: true, laborCost: true,
+              partsBilled: true, partsCost: true, grossProfit: true, grossMarginPct: true,
+              billableHours: true, totalHours: true, utilizationPct: true },
+  });
+  const snapshotByMonth = Object.fromEntries(fpaSnapshots.map(s => [s.month, s]));
+
+  // For months without a snapshot (typically the current month), hit the DB live
+  const missingMonths = twelveMonthKeys.filter(m => !snapshotByMonth[m.key]);
+  const liveResults = await Promise.all(
+    missingMonths.map(m =>
+      prisma.invoice.aggregate({
+        _sum: { total: true },
+        where: { orgId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'PAID'] }, issueDate: { gte: m.start, lte: m.end } },
+      }).then(r => ({ key: m.key, revenue: Number(r._sum.total ?? 0) }))
+    )
+  );
+  const liveByMonth = Object.fromEntries(liveResults.map(r => [r.key, r.revenue]));
+
+  const monthlyRevenue = twelveMonthKeys.map(m => ({
+    month: m.label,
+    revenue: snapshotByMonth[m.key]?.revenue ?? liveByMonth[m.key] ?? 0,
+  }));
 
   const rev = Number(revenueNow._sum.total ?? 0);
   const revPrev = Number(revenuePrev._sum.total ?? 0);
@@ -117,5 +139,7 @@ export async function GET(_req: NextRequest) {
     avgInvoiceAgeDays,
     techsOnJobsCount,
     woTypeBreakdown,
+    // Historical FPA snapshots for trend analysis (margin, utilization over time)
+    fpaHistory: fpaSnapshots.sort((a, b) => a.month.localeCompare(b.month)),
   }});
 }
