@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "dev:web": "turbo dev:web",
+    "dev:web": "pnpm --filter @mro/web dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "db:generate": "turbo db:generate",
@@ -12,7 +12,6 @@
     "db:seed": "turbo db:seed",
     "db:deploy": "pnpm --filter @mro/db exec prisma migrate deploy",
     "db:studio": "cd packages/db && pnpm prisma studio",
-    "dev:web": "pnpm --filter @mro/web dev",
     "mobile": "pnpm --filter @mro/mobile dev"
   },
   "devDependencies": {
