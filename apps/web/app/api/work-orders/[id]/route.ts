@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
   const wo = await prisma.workOrder.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       customer: true,
       aircraft: true,
@@ -30,18 +31,19 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { notes, internalNotes, estimatedClose, estimatedTotal, status, actorName } = body;
 
     // Read current state before update (for audit log before snapshot)
     const current = await prisma.workOrder.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { orgId: true, status: true, notes: true, estimatedTotal: true },
     });
     if (!current) return NextResponse.json({ error: 'Work order not found' }, { status: 404 });
 
     const wo = await prisma.workOrder.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(notes !== undefined ? { notes } : {}),
         ...(internalNotes !== undefined ? { internalNotes } : {}),
@@ -57,7 +59,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         data: {
           orgId: current.orgId,
           entityType: 'WorkOrder',
-          entityId: params.id,
+          entityId: id,
           action: 'STATUS_CHANGED',
           actorName: actorName ?? null,
           before: { status: current.status },

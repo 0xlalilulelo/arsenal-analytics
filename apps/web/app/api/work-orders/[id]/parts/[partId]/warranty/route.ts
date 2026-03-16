@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string; partId: string } };
+type Params = { params: Promise<{ id: string; partId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const { partId } = await params;
   const record = await prisma.warrantyRecord.findUnique({
-    where: { partRequestId: params.partId },
+    where: { partRequestId: partId },
   });
   return NextResponse.json({ data: record });
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const { id, partId } = await params;
     const body = await request.json();
     const {
       vendor, warrantyMonths, installDate, expiresAt,
@@ -27,14 +29,14 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     // Verify part belongs to this work order
     const part = await prisma.partRequest.findFirst({
-      where: { id: params.partId, workOrderId: params.id },
+      where: { id: partId, workOrderId: id },
     });
     if (!part) return NextResponse.json({ error: 'Part request not found' }, { status: 404 });
 
     const record = await prisma.warrantyRecord.upsert({
-      where: { partRequestId: params.partId },
+      where: { partRequestId: partId },
       create: {
-        partRequestId: params.partId,
+        partRequestId: partId,
         vendor: vendor.trim(),
         warrantyMonths,
         installDate: installDate ? new Date(installDate) : null,

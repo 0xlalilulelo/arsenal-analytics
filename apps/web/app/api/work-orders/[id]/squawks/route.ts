@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
   const squawks = await prisma.squawk.findMany({
-    where: { workOrderId: params.id },
+    where: { workOrderId: id },
     orderBy: { createdAt: 'asc' },
   });
   return NextResponse.json({ data: squawks });
@@ -13,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { description, isAirworthiness = false, estLaborHours, estPartsTotal } = body;
 
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const squawk = await prisma.squawk.create({
       data: {
-        workOrderId: params.id,
+        workOrderId: id,
         description,
         isAirworthiness,
         estLaborHours: estLaborHours ?? null,
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 // Body: { squawkId, status: 'APPROVED' | 'DECLINED' | 'DEFERRED', approvedBy?, declineReason? }
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { squawkId, status, approvedBy, declineReason, photoUrls } = body;
 
@@ -63,13 +66,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     // Audit log for squawk status changes
     if (status && prevSquawk && status !== prevSquawk.status) {
-      const wo = await prisma.workOrder.findUnique({ where: { id: params.id }, select: { orgId: true } });
+      const wo = await prisma.workOrder.findUnique({ where: { id }, select: { orgId: true } });
       if (wo) {
         await prisma.auditLog.create({
           data: {
             orgId: wo.orgId,
             entityType: 'WorkOrder',
-            entityId: params.id,
+            entityId: id,
             action: 'SQUAWK_STATUS_CHANGED',
             actorName: approvedBy ?? null,
             before: { squawkStatus: prevSquawk.status },

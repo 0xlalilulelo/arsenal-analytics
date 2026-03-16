@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string; lineItemId: string } };
+type Params = { params: Promise<{ id: string; lineItemId: string }> };
 
 const VALID_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETE', 'AWAITING_INSPECTION', 'SIGNED_OFF'];
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const { id, lineItemId } = await params;
     const body = await request.json();
     const { status } = body;
 
@@ -18,14 +19,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const lineItem = await prisma.workOrderLineItem.findFirst({
-      where: { id: params.lineItemId, workOrderId: params.id },
+      where: { id: lineItemId, workOrderId: id },
     });
     if (!lineItem) {
       return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
     }
 
     const updated = await prisma.workOrderLineItem.update({
-      where: { id: params.lineItemId },
+      where: { id: lineItemId },
       data: {
         status,
         ...(status === 'COMPLETE' || status === 'SIGNED_OFF'
@@ -46,14 +47,15 @@ export async function DELETE(
   { params }: Params,
 ) {
   try {
+    const { id, lineItemId } = await params;
     const lineItem = await prisma.workOrderLineItem.findFirst({
-      where: { id: params.lineItemId, workOrderId: params.id },
+      where: { id: lineItemId, workOrderId: id },
     });
     if (!lineItem) {
       return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
     }
 
-    await prisma.workOrderLineItem.delete({ where: { id: params.lineItemId } });
+    await prisma.workOrderLineItem.delete({ where: { id: lineItemId } });
     return NextResponse.json({ data: { deleted: true } });
   } catch (e) {
     console.error('[LINE_ITEM_DELETE]', e);

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { description, estHours = 0, referenceDoc, laborRate: bodyLaborRate } = body;
 
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     const wo = await prisma.workOrder.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         laborRate: true,
         lineItems: { select: { id: true } },
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const lineItem = await prisma.workOrderLineItem.create({
       data: {
-        workOrderId: params.id,
+        workOrderId: id,
         taskNumber,
         description: description.trim(),
         referenceDoc: referenceDoc?.trim() || null,
