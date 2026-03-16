@@ -20,6 +20,12 @@ export async function GET(request: NextRequest) {
   const orgId = await resolveOrgId();
   if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
+  // Lazily mark overdue: SENT/VIEWED invoices past their due date become OVERDUE
+  await prisma.invoice.updateMany({
+    where: { orgId, status: { in: ['SENT', 'VIEWED'] }, dueDate: { lt: new Date() } },
+    data: { status: 'OVERDUE' },
+  }).catch(() => {/* non-critical, don't fail the request */});
+
   const [invoices, total] = await Promise.all([
     prisma.invoice.findMany({
       where: { orgId, ...(status ? { status } : {}), ...(customerId ? { customerId } : {}) },

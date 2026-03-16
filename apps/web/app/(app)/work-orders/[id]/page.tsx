@@ -54,6 +54,7 @@ export default function WorkOrderDetailPage() {
   const [deleteComplianceId, setDeleteComplianceId] = useState<string | null>(null);
   const [editLaborEntry, setEditLaborEntry] = useState<{ id: string; hours: number; description: string | null; billable: boolean; date: string } | null>(null);
   const [deleteLaborId, setDeleteLaborId] = useState<string | null>(null);
+  const [deleteLineItemId, setDeleteLineItemId] = useState<string | null>(null);
 
   // WO edit form state
   const [woNotes, setWoNotes] = useState('');
@@ -243,6 +244,15 @@ export default function WorkOrderDetailPage() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/work-orders/${workOrderId}/labor/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete labor entry');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
+  });
+
+  const { mutateAsync: deleteLineItem } = useMutation({
+    mutationFn: async (lineItemId: string) => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/line-items/${lineItemId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete task card');
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['work-order', workOrderId] }),
@@ -460,6 +470,12 @@ export default function WorkOrderDetailPage() {
                         <p className="text-xs text-content-secondary">{wo.notes}</p>
                       </div>
                     )}
+                    {wo.internalNotes && (
+                      <div className="rounded border-l-2 border-intent-warning/60 bg-intent-warning/5 pl-2 py-1">
+                        <p className="text-xs text-intent-warning font-medium mb-0.5">Internal Notes</p>
+                        <p className="text-xs text-content-secondary">{wo.internalNotes}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -483,6 +499,7 @@ export default function WorkOrderDetailPage() {
                             <th className="text-right py-2 px-4 text-content-muted font-semibold">Act h</th>
                             <th className="text-right py-2 px-4 text-content-muted font-semibold">Billed</th>
                             <th className="text-left py-2 px-4 text-content-muted font-semibold">Status</th>
+                            <th className="py-2 px-2" />
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-hover">
@@ -490,7 +507,7 @@ export default function WorkOrderDetailPage() {
                             const actualH = hoursPerTask[li.id] ?? 0;
                             const variance = actualH > 0 && li.estHours > 0 ? (actualH - li.estHours) / li.estHours : 0;
                             return (
-                              <tr key={li.id} className="hover:bg-surface-hover/30">
+                              <tr key={li.id} className="hover:bg-surface-hover/30 group">
                                 <td className="py-2.5 px-4 font-mono text-content-muted">{li.taskNumber}</td>
                                 <td className="py-2.5 px-4 text-content-primary max-w-xs">{li.description}</td>
                                 <td className="py-2.5 px-4 text-right font-mono text-content-muted">{li.estHours.toFixed(1)}</td>
@@ -514,6 +531,15 @@ export default function WorkOrderDetailPage() {
                                       ))}
                                     </SelectContent>
                                   </Select>
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-6 w-6 p-0 text-content-muted hover:text-intent-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => setDeleteLineItemId(li.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
                                 </td>
                               </tr>
                             );
@@ -685,6 +711,41 @@ export default function WorkOrderDetailPage() {
                       <span>Est. Total</span>
                       <span className="font-mono">{formatCurrency(wo.estimatedTotal ?? 0)}</span>
                     </div>
+                    {wo.depositAmount > 0 && (
+                      <div className="flex justify-between text-xs border-t border-surface-hover pt-2">
+                        <span className="text-content-muted">Deposit</span>
+                        <span className="font-mono text-content-secondary">{formatCurrency(wo.depositAmount)} required</span>
+                      </div>
+                    )}
+                    {wo.billingModel === 'NOT_TO_EXCEED' && wo.nteAmount && (() => {
+                      const currentTotal = totalLaborBilled + shopSupplies;
+                      const ntePct = Math.min((currentTotal / wo.nteAmount) * 100, 100);
+                      const isOver = currentTotal >= wo.nteAmount;
+                      const isNear = ntePct >= 80;
+                      return (
+                        <div className="border-t border-surface-hover pt-2 space-y-1.5">
+                          <div className="flex justify-between text-xs">
+                            <span className={isOver ? 'text-intent-danger font-medium' : isNear ? 'text-intent-warning font-medium' : 'text-content-muted'}>
+                              NTE Cap
+                            </span>
+                            <span className={`font-mono ${isOver ? 'text-intent-danger' : isNear ? 'text-intent-warning' : 'text-content-secondary'}`}>
+                              {formatCurrency(currentTotal)} / {formatCurrency(wo.nteAmount)} ({ntePct.toFixed(0)}%)
+                            </span>
+                          </div>
+                          <Progress
+                            value={ntePct}
+                            className={`h-1.5 ${isOver ? '[&>div]:bg-intent-danger' : isNear ? '[&>div]:bg-intent-warning' : ''}`}
+                          />
+                          {isOver && (
+                            <Alert variant="destructive" className="py-2 px-3">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              <AlertTitle className="text-xs">NTE Cap Reached</AlertTitle>
+                              <AlertDescription className="text-xs">Additional work requires customer re-authorization before proceeding.</AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
                 <Card>
@@ -943,6 +1004,28 @@ export default function WorkOrderDetailPage() {
               onClick={async () => {
                 if (deleteComplianceId) await deleteComplianceItem(deleteComplianceId);
                 setDeleteComplianceId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Task Card Confirm */}
+      <AlertDialog open={!!deleteLineItemId} onOpenChange={(v) => !v && setDeleteLineItemId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task Card?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove the task card. This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-intent-danger hover:bg-intent-danger/90 text-white"
+              onClick={async () => {
+                if (deleteLineItemId) await deleteLineItem(deleteLineItemId);
+                setDeleteLineItemId(null);
               }}
             >
               Delete

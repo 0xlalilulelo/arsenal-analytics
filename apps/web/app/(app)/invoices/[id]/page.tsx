@@ -14,7 +14,10 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { useInvoiceDetail, useRecordPayment, useUpdateInvoice } from '@/hooks/useInvoices';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer, Ban } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, CheckCircle2, Send, Loader2, Copy, ExternalLink, Printer, Ban, Pencil, Trash2, Plus } from 'lucide-react';
+
+const LINE_ITEM_CATEGORIES = ['LABOR', 'PARTS', 'SHOP_SUPPLIES', 'FREIGHT', 'HANDLING', 'SUBCONTRACT', 'OTHER'];
 
 const CATEGORY_LABEL: Record<string, string> = {
   LABOR: 'Labor', PARTS: 'Parts', SHOP_SUPPLIES: 'Shop Supplies',
@@ -41,6 +44,58 @@ export default function InvoiceDetailPage() {
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { can: userCan } = useCurrentUser();
+
+  // Line item editing state
+  const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+  const [editLineItem, setEditLineItem] = useState<any | null>(null);
+  const [deleteLineItemId, setDeleteLineItemId] = useState<string | null>(null);
+  const [liDescription, setLiDescription] = useState('');
+  const [liCategory, setLiCategory] = useState('OTHER');
+  const [liQty, setLiQty] = useState('1');
+  const [liUnitPrice, setLiUnitPrice] = useState('');
+  const qc = useQueryClient();
+
+  const { mutateAsync: addLineItem, isPending: addingLi } = useMutation({
+    mutationFn: async (data: object) => {
+      const res = await fetch(`/api/invoices/${id}/line-items`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add line item');
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setAddLineItemOpen(false); },
+  });
+
+  const { mutateAsync: saveLineItem, isPending: savingLi } = useMutation({
+    mutationFn: async ({ itemId, data }: { itemId: string; data: object }) => {
+      const res = await fetch(`/api/invoices/${id}/line-items/${itemId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update line item');
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEditLineItem(null); },
+  });
+
+  const { mutateAsync: removeLineItem } = useMutation({
+    mutationFn: async (itemId: string) => {
+      const res = await fetch(`/api/invoices/${id}/line-items/${itemId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete line item');
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoice', id] }),
+  });
+
+  function openAdd() {
+    setLiDescription(''); setLiCategory('OTHER'); setLiQty('1'); setLiUnitPrice('');
+    setAddLineItemOpen(true);
+  }
+
+  function openEdit(li: any) {
+    setLiDescription(li.description); setLiCategory(li.category);
+    setLiQty(String(li.qty)); setLiUnitPrice(String(li.unitPrice));
+    setEditLineItem(li);
+  }
 
   if (isLoading) {
     return (
@@ -219,7 +274,14 @@ export default function InvoiceDetailPage() {
 
           {/* Line items */}
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm">Line Items</CardTitle></CardHeader>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm">Line Items</CardTitle>
+              {!['PAID', 'VOID'].includes(inv.status) && (
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openAdd}>
+                  <Plus className="h-3.5 w-3.5" />Add Item
+                </Button>
+              )}
+            </CardHeader>
             <CardContent className="p-0">
               <table className="w-full text-sm">
                 <thead>
@@ -229,6 +291,7 @@ export default function InvoiceDetailPage() {
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Qty</th>
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Unit Price</th>
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-content-muted">Total</th>
+                    {!['PAID', 'VOID'].includes(inv.status) && <th className="py-2.5 px-2" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-hover">
@@ -236,7 +299,7 @@ export default function InvoiceDetailPage() {
                     <tr><td colSpan={5} className="py-8 text-center text-xs text-content-muted">No line items.</td></tr>
                   )}
                   {inv.lineItems?.map((li: any) => (
-                    <tr key={li.id} className="hover:bg-surface-hover/30">
+                    <tr key={li.id} className="hover:bg-surface-hover/30 group">
                       <td className="py-2.5 px-4">
                         <Badge variant="default" className="text-xs">{CATEGORY_LABEL[li.category] ?? li.category}</Badge>
                       </td>
@@ -244,6 +307,24 @@ export default function InvoiceDetailPage() {
                       <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{li.qty}</td>
                       <td className="py-2.5 px-4 text-right font-mono text-xs text-content-secondary">{formatCurrency(li.unitPrice)}</td>
                       <td className="py-2.5 px-4 text-right font-mono text-xs font-semibold text-content-primary">{formatCurrency(li.total)}</td>
+                      {!['PAID', 'VOID'].includes(inv.status) && (
+                        <td className="py-2.5 px-2">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost" size="sm" className="h-6 w-6 p-0 text-content-muted hover:text-content-primary"
+                              onClick={() => openEdit(li)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm" className="h-6 w-6 p-0 text-content-muted hover:text-intent-danger"
+                              onClick={() => setDeleteLineItemId(li.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -287,6 +368,103 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Add / Edit Line Item Dialog */}
+      {[
+        { open: addLineItemOpen, setOpen: setAddLineItemOpen, mode: 'add' as const },
+        { open: !!editLineItem, setOpen: (v: boolean) => !v && setEditLineItem(null), mode: 'edit' as const },
+      ].map(({ open, setOpen, mode }) => (
+        <Dialog key={mode} open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{mode === 'add' ? 'Add Line Item' : 'Edit Line Item'}</DialogTitle>
+              <DialogDescription>{inv.invoiceNumber}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Category</Label>
+                <Select value={liCategory} onValueChange={setLiCategory}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LINE_ITEM_CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c} className="text-xs">{CATEGORY_LABEL[c] ?? c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Description *</Label>
+                <Input value={liDescription} onChange={e => setLiDescription(e.target.value)} className="h-8 text-sm" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Qty</Label>
+                  <Input type="number" min="1" step="1" value={liQty} onChange={e => setLiQty(e.target.value)} className="h-8 text-sm font-mono" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Unit Price</Label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-content-muted">$</span>
+                    <Input type="number" step="0.01" min="0" value={liUnitPrice} onChange={e => setLiUnitPrice(e.target.value)} className="h-8 text-sm font-mono pl-5" />
+                  </div>
+                </div>
+              </div>
+              {liQty && liUnitPrice && (
+                <p className="text-xs text-right text-content-muted">
+                  Line total: <span className="font-mono font-semibold text-content-primary">
+                    {formatCurrency(parseFloat(liQty || '0') * parseFloat(liUnitPrice || '0'))}
+                  </span>
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button
+                disabled={!liDescription.trim() || !liUnitPrice || (mode === 'add' ? addingLi : savingLi)}
+                onClick={async () => {
+                  const payload = {
+                    description: liDescription.trim(),
+                    category: liCategory,
+                    qty: parseFloat(liQty) || 1,
+                    unitPrice: parseFloat(liUnitPrice),
+                  };
+                  if (mode === 'add') {
+                    await addLineItem(payload);
+                  } else {
+                    await saveLineItem({ itemId: editLineItem.id, data: payload });
+                  }
+                }}
+                className="gap-2"
+              >
+                {(mode === 'add' ? addingLi : savingLi) && <Loader2 className="h-4 w-4 animate-spin" />}
+                {mode === 'add' ? 'Add Item' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ))}
+
+      {/* Delete Line Item Confirm */}
+      <AlertDialog open={!!deleteLineItemId} onOpenChange={(v) => !v && setDeleteLineItemId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Line Item?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove this line item and recalculate the invoice total.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-intent-danger hover:bg-intent-danger/90 text-white"
+              onClick={async () => {
+                if (deleteLineItemId) await removeLineItem(deleteLineItemId);
+                setDeleteLineItemId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
         <AlertDialogContent>

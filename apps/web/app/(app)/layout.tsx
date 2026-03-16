@@ -1,12 +1,16 @@
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AogBanner } from '@/components/layout/AogBanner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { prisma } from '@mro/db';
 
-// In production, fetch active AOG count from DB
 async function getAogCount(): Promise<number> {
-  // This would be a server-side DB call
-  // For demo: return 1 to show the AOG banner
-  return 1;
+  try {
+    return await prisma.workOrder.count({
+      where: { type: 'AOG', status: { in: ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL'] } },
+    });
+  } catch {
+    return 0;
+  }
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

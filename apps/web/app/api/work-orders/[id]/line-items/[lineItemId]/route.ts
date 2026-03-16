@@ -40,3 +40,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: Params,
+) {
+  try {
+    const lineItem = await prisma.workOrderLineItem.findFirst({
+      where: { id: params.lineItemId, workOrderId: params.id },
+    });
+    if (!lineItem) {
+      return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
+    }
+
+    await prisma.workOrderLineItem.delete({ where: { id: params.lineItemId } });
+    return NextResponse.json({ data: { deleted: true } });
+  } catch (e) {
+    console.error('[LINE_ITEM_DELETE]', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

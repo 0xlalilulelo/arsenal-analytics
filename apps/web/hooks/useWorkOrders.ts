@@ -24,6 +24,8 @@ export type WorkOrderDetail = {
   billingModel: string;
   estimatedTotal: number | null;
   actualTotal: number | null;
+  nteAmount: number | null;
+  depositAmount: number;
   dateOpened: string;
   estimatedClose: string | null;
   notes: string | null;
