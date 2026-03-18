@@ -38,3 +38,5 @@ packages/db/prisma/migrations/*.sql.bak
 
 # TypeScript
 *.tsbuildinfo
+.vercel
+.env*.local
