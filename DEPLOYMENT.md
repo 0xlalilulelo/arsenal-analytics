@@ -31,14 +31,19 @@ railway link   # link this repo to your Railway project
 
 ### Run migrations
 
+Use the public Railway URL (visible under the database service → **Connect** tab).
+The internal `postgres.railway.internal` hostname is only reachable from within Railway's private network.
+
 ```bash
-DATABASE_URL="<your-railway-url>" npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+DATABASE_URL="<your-public-railway-url>" npx prisma@6 migrate deploy --schema packages/db/prisma/schema.prisma
 ```
+
+> **Note**: Pin to `prisma@6` — the project is not compatible with Prisma 7, which changed how connection URLs are configured. Without the version pin `npx` may resolve to Prisma 7 and fail.
 
 ### Seed demo data (staging only)
 
 ```bash
-DATABASE_URL="<your-railway-url>" SEED_PASSWORD="ChooseAStrongPassword" pnpm db:seed
+DATABASE_URL="<your-public-railway-url>" SEED_PASSWORD="ChooseAStrongPassword" pnpm db:seed
 ```
 
 This creates a demo org **Skyline Aviation Services** with 6 users, customers, aircraft, and work orders.
@@ -141,7 +146,7 @@ To run migrations automatically on deploy, add this step to your workflow before
 
 ```yaml
 - name: Run DB migrations
-  run: npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+  run: npx prisma@6 migrate deploy --schema packages/db/prisma/schema.prisma
   env:
     DATABASE_URL: ${{ secrets.DATABASE_URL }}
 ```
