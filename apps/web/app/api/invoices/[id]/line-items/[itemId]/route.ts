@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string; itemId: string } };
+type Params = { params: Promise<{ id: string; itemId: string }> };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const { id, itemId } = await params;
     const body = await request.json();
     const { description, qty, unitPrice, taxable } = body;
 
     const item = await prisma.invoiceLineItem.findFirst({
-      where: { id: params.itemId, invoiceId: params.id },
+      where: { id: itemId, invoiceId: id },
     });
     if (!item) return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
 
-    const invoice = await prisma.invoice.findUnique({ where: { id: params.id } });
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     if (['PAID', 'VOID'].includes(invoice.status)) {
       return NextResponse.json({ error: 'Cannot modify a paid or void invoice' }, { status: 409 });
@@ -24,7 +25,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const newTotal = newQty * newUnitPrice;
 
     await prisma.invoiceLineItem.update({
-      where: { id: params.itemId },
+      where: { id: itemId },
       data: {
         ...(description !== undefined ? { description } : {}),
         ...(qty !== undefined ? { qty } : {}),
@@ -35,13 +36,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     });
 
     // Recalculate invoice totals
-    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: params.id } });
+    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: id } });
     const subtotal = allItems.reduce((s, li) => s + li.total, 0);
     const taxAmount = allItems.filter(li => li.taxable).reduce((s, li) => s + li.total, 0) * (invoice.taxRate ?? 0);
     const newInvoiceTotal = subtotal + taxAmount;
 
     const updatedInvoice = await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id },
       data: { subtotal, total: newInvoiceTotal, balance: newInvoiceTotal - invoice.amountPaid },
       include: { lineItems: { orderBy: { sortOrder: 'asc' } } },
     });
@@ -55,27 +56,28 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
+    const { id, itemId } = await params;
     const item = await prisma.invoiceLineItem.findFirst({
-      where: { id: params.itemId, invoiceId: params.id },
+      where: { id: itemId, invoiceId: id },
     });
     if (!item) return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
 
-    const invoice = await prisma.invoice.findUnique({ where: { id: params.id } });
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     if (['PAID', 'VOID'].includes(invoice.status)) {
       return NextResponse.json({ error: 'Cannot modify a paid or void invoice' }, { status: 409 });
     }
 
-    await prisma.invoiceLineItem.delete({ where: { id: params.itemId } });
+    await prisma.invoiceLineItem.delete({ where: { id: itemId } });
 
     // Recalculate invoice totals
-    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: params.id } });
+    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: id } });
     const subtotal = allItems.reduce((s, li) => s + li.total, 0);
     const taxAmount = allItems.filter(li => li.taxable).reduce((s, li) => s + li.total, 0) * (invoice.taxRate ?? 0);
     const newTotal = subtotal + taxAmount;
 
     await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id },
       data: { subtotal, total: newTotal, balance: newTotal - invoice.amountPaid },
     });
 
