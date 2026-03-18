@@ -3,11 +3,12 @@ import { prisma } from '@mro/db';
 import { randomUUID } from 'crypto';
 import { sendInvoiceEmail, APP_URL } from '@/lib/email';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
   const invoice = await prisma.invoice.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       customer: true,
       workOrder: { select: { id: true, number: true, aircraft: { select: { nNumber: true, make: true, model: true } } } },
@@ -22,11 +23,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { status, notes } = body;
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { customer: { select: { name: true, email: true } } },
     });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -57,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const updated = await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(status ? { status } : {}),
         ...(notes !== undefined ? { notes } : {}),

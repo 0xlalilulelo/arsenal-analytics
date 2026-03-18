@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { description, category = 'OTHER', qty = 1, unitPrice, taxable = false } = body;
 
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { lineItems: { select: { id: true } } },
     });
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const lineItem = await prisma.invoiceLineItem.create({
       data: {
-        invoiceId: params.id,
+        invoiceId: id,
         description: description.trim(),
         category,
         qty,
@@ -41,13 +42,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
 
     // Recalculate invoice totals
-    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: params.id } });
+    const allItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId: id } });
     const subtotal = allItems.reduce((s, li) => s + li.total, 0);
     const taxAmount = allItems.filter(li => li.taxable).reduce((s, li) => s + li.total, 0) * (invoice.taxRate ?? 0);
     const newTotal = subtotal + taxAmount;
 
     await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id },
       data: { subtotal, total: newTotal, balance: newTotal - invoice.amountPaid },
     });
 
