@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@mro/db';
 import { verifyPassword } from '@/lib/password';
+import { authConfig } from '@/auth.config';
 
 async function verifyCredentials(email: string, password: string) {
   const user = await prisma.user.findUnique({
@@ -24,6 +25,7 @@ async function verifyCredentials(email: string, password: string) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({
@@ -41,28 +43,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/sign-in',
-    newUser: '/sign-up',
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.orgId = (user as { orgId?: string }).orgId;
-        token.role = (user as { role?: string }).role;
-        token.userId = user.id;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        const u = session.user as { orgId?: string; role?: string; id?: string };
-        u.orgId = token.orgId as string;
-        u.role = token.role as string;
-        u.id = token.userId as string;
-      }
-      return session;
-    },
-  },
 });

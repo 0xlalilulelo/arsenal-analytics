@@ -1,6 +1,9 @@
-import { auth } from '@/auth';
+import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
+import { authConfig } from '@/auth.config';
 import { hasRole } from '@/lib/rbac';
+
+const { auth } = NextAuth(authConfig);
 
 /** Routes that require a minimum role. First match wins. */
 const ROLE_GUARDS: Array<{ prefix: string; minRole: 'OWNER' | 'MANAGER' | 'ACCOUNTANT' | 'PARTS_CLERK' | 'TECHNICIAN' }> = [
