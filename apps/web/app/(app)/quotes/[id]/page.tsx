@@ -563,7 +563,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Edit Quote</DialogTitle>
-            <DialogDescription>{quote.number} — update terms and notes</DialogDescription>
+            <DialogDescription>{quote.quoteNumber} — update terms and notes</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
