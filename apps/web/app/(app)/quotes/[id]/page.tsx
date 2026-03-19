@@ -631,7 +631,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     billingModel: editBillingModel,
                     validDays: editValidDays ? parseInt(editValidDays) : undefined,
                     depositPct: editDepositPct ? parseFloat(editDepositPct) / 100 : undefined,
-                    nteAmount: editNte ? parseFloat(editNte) : null,
+                    nteAmount: editNte ? parseFloat(editNte) : undefined,
                     notes: editNotes || undefined,
                   });
                   setEditOpen(false);
