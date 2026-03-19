@@ -645,6 +645,7 @@ model Quote {
   declineReason String?
   notes        String?
   internalNotes String?
+  portalToken  String?   @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

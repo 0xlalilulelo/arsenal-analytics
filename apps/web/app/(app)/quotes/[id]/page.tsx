@@ -632,7 +632,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
                     validDays: editValidDays ? parseInt(editValidDays) : undefined,
                     depositPct: editDepositPct ? parseFloat(editDepositPct) / 100 : undefined,
                     nteAmount: editNte ? parseFloat(editNte) : null,
-                    notes: editNotes || null,
+                    notes: editNotes || undefined,
                   });
                   setEditOpen(false);
                 } finally {
