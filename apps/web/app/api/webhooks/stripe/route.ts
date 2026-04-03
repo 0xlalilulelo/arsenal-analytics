@@ -33,6 +33,14 @@ export async function POST(req: NextRequest) {
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
     if (!invoice) return NextResponse.json({ received: true });
 
+    const existingPayment = await prisma.payment.findFirst({
+      where: { reference: session.id },
+    });
+    if (existingPayment) {
+      console.log(`[STRIPE WEBHOOK] Duplicate event for session ${session.id}, skipping`);
+      return NextResponse.json({ received: true });
+    }
+
     const amountPaid = session.amount_total / 100; // cents → dollars
     const newAmountPaid = invoice.amountPaid + amountPaid;
     const newBalance = Math.max(0, invoice.total - newAmountPaid);

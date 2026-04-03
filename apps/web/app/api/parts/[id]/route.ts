@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { getOrgId } from '@/lib/get-org-id';
 import { prisma } from '@mro/db';
-
-async function resolveOrgId() {
-  const session = await auth();
-  const orgId = (session?.user as { orgId?: string })?.orgId;
-  return orgId ?? (await prisma.organization.findFirst({ select: { id: true } }))?.id ?? null;
-}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const orgId = await resolveOrgId();
+  const orgId = await getOrgId();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const part = await prisma.part.findFirst({ where: { id, orgId } });
@@ -20,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const orgId = await resolveOrgId();
+  const orgId = await getOrgId();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const part = await prisma.part.findFirst({ where: { id, orgId } });
@@ -56,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const orgId = await resolveOrgId();
+  const orgId = await getOrgId();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const part = await prisma.part.findFirst({ where: { id, orgId } });

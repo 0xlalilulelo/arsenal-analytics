@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { getOrgId } from '@/lib/get-org-id';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,14 +11,21 @@ function roundToIncrement(hours: number, incrementMinutes: number): number {
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { id } = await params;
     const body = await request.json();
     const { technicianId, date, hours, description, lineItemId, billable = true } = body;
 
+    if (typeof hours !== 'number' || hours <= 0 || hours > 24) {
+      return NextResponse.json({ error: 'hours must be a positive number <= 24' }, { status: 422 });
+    }
+
     const [tech, wo, org] = await Promise.all([
       prisma.technician.findUnique({ where: { id: technicianId }, select: { billRate: true, name: true } }),
-      prisma.workOrder.findUnique({ where: { id }, include: { laborRate: { select: { multiplier: true } }, org: { select: { laborRoundingMinutes: true } } } }),
-      prisma.organization.findFirst({ select: { id: true, laborRoundingMinutes: true } }),
+      prisma.workOrder.findUnique({ where: { id, orgId }, include: { laborRate: { select: { multiplier: true } }, org: { select: { laborRoundingMinutes: true } } } }),
+      prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, laborRoundingMinutes: true } }),
     ]);
 
     if (!tech) return NextResponse.json({ error: 'Technician not found' }, { status: 404 });
@@ -64,6 +72,9 @@ export async function POST(request: NextRequest, { params }: Params) {
 // PATCH /api/work-orders/[id]/labor — clock out (update clockOut on an entry)
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { id } = await params;
     const body = await request.json();
     const { entryId, clockOut } = body;
@@ -75,7 +86,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (!entry) return NextResponse.json({ error: 'Labor entry not found' }, { status: 404 });
     if (!entry.clockIn) return NextResponse.json({ error: 'No clock-in recorded' }, { status: 422 });
 
-    const org = await prisma.organization.findFirst({ select: { laborRoundingMinutes: true } });
+    const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { laborRoundingMinutes: true } });
     const roundingMinutes = org?.laborRoundingMinutes ?? 15;
 
     const clockOutDate = new Date(clockOut);

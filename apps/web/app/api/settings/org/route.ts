@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSessionUser } from '@/lib/get-org-id';
+import { hasRole } from '@/lib/rbac';
 import { prisma } from '@mro/db';
 
 const ORG_SELECT = {
@@ -16,14 +18,20 @@ const ORG_SELECT = {
 } as const;
 
 export async function GET() {
-  const org = await prisma.organization.findFirst({ select: ORG_SELECT });
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const org = await prisma.organization.findUnique({ where: { id: sessionUser.orgId }, select: ORG_SELECT });
   if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
   return NextResponse.json({ data: org });
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const org = await prisma.organization.findFirst({ select: { id: true } });
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || !hasRole(sessionUser.role, 'MANAGER')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const org = await prisma.organization.findUnique({ where: { id: sessionUser.orgId }, select: { id: true } });
     if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
     const body = await request.json();
@@ -48,7 +56,14 @@ export async function PATCH(request: NextRequest) {
     if (shopSuppliesPct !== undefined) data.shopSuppliesPct = Math.max(0, Math.min(1, Number(shopSuppliesPct)));
     if (defaultTaxRatePct !== undefined) data.defaultTaxRatePct = Math.max(0, Math.min(1, Number(defaultTaxRatePct)));
     if (defaultBillingTerms !== undefined) data.defaultBillingTerms = defaultBillingTerms;
-    if (laborRoundingMinutes !== undefined) data.laborRoundingMinutes = Number(laborRoundingMinutes);
+    if (laborRoundingMinutes !== undefined) {
+      const validRounding = [1, 5, 6, 10, 15, 30, 60];
+      const val = Number(laborRoundingMinutes);
+      if (!validRounding.includes(val)) {
+        return NextResponse.json({ error: `laborRoundingMinutes must be one of: ${validRounding.join(', ')}` }, { status: 422 });
+      }
+      data.laborRoundingMinutes = val;
+    }
 
     const updated = await prisma.organization.update({
       where: { id: org.id },

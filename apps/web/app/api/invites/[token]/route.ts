@@ -12,8 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   });
 
   if (!invite) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
-  if (invite.acceptedAt) return NextResponse.json({ error: 'Invite already accepted' }, { status: 410 });
-  if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite has expired' }, { status: 410 });
+  if (invite.acceptedAt) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
+  if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
 
   return NextResponse.json({
     data: {
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
   const { name, password } = await req.json() as { name: string; password: string };
 
-  if (!password || password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  if (!password || password.length < 12) {
+    return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
   }
 
   const invite = await prisma.userInvite.findUnique({
@@ -39,9 +39,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     include: { org: true },
   });
 
-  if (!invite) return NextResponse.json({ error: 'Invite not found' }, { status: 404 });
-  if (invite.acceptedAt) return NextResponse.json({ error: 'Already accepted' }, { status: 410 });
-  if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite expired' }, { status: 410 });
+  if (!invite) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
+  if (invite.acceptedAt) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
+  if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite not found or expired' }, { status: 404 });
 
   const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
   if (existingUser) {

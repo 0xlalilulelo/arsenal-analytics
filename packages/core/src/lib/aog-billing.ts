@@ -65,7 +65,8 @@ export function calculateAOGCallout(input: AOGCalloutInput): AOGCalloutBreakdown
     : 0;
 
   const mileageTotal = mileage * mileageRate;
-  const driveTimeTotal = driveHours * driveRate * techCount;
+  const aogDriveRate = driveRate * AOG_MULTIPLIER;
+  const driveTimeTotal = driveHours * aogDriveRate * techCount;
   const grandTotal = laborTotal + mileageTotal + driveTimeTotal;
 
   const lineItems: AOGLineItem[] = [];
@@ -102,9 +103,9 @@ export function calculateAOGCallout(input: AOGCalloutInput): AOGCalloutBreakdown
 
   if (driveTimeTotal > 0) {
     lineItems.push({
-      description: `Drive Time — ${driveHours}h × ${techCount} tech${techCount > 1 ? 's' : ''} @ $${driveRate.toFixed(2)}/hr`,
+      description: `Drive Time — ${driveHours}h × ${techCount} tech${techCount > 1 ? 's' : ''} @ $${aogDriveRate.toFixed(2)}/hr (1.5× AOG)`,
       qty: driveHours * techCount,
-      unitPrice: driveRate,
+      unitPrice: aogDriveRate,
       total: driveTimeTotal,
       category: 'OTHER',
     });

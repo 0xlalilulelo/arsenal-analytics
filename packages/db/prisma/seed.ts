@@ -3,8 +3,10 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Demo password for all seeded users — change before real production use
-const SEED_PASSWORD = process.env.SEED_PASSWORD ?? 'Arsenal2025!';
+const SEED_PASSWORD = process.env.SEED_PASSWORD;
+if (!SEED_PASSWORD) {
+  throw new Error('SEED_PASSWORD environment variable is required. Set it before running the seed script.');
+}
 
 async function main() {
   console.log('🌱 Seeding database...');

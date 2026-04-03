@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { hashPassword } from '@/lib/password';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const rl = rateLimit(`register:${ip}`, 10, 3600); // 10 per hour per IP
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     const { shopName, email, password, name } = await request.json() as {
       shopName: string; email: string; password: string; name?: string;
     };
@@ -12,8 +19,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shop name, email, and password are required' }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+    if (password.length < 12) {
+      return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });

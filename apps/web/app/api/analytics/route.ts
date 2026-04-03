@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { classifyAgingBucket } from '@mro/core';
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET(_req: NextRequest) {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
-  const orgId = org.id;
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);

@@ -34,6 +34,7 @@ export function PaymentDialog({ open, onClose, invoiceId, invoiceNumber, balance
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setError(null);
     try {

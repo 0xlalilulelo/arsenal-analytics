@@ -8,6 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plane, Loader2 } from 'lucide-react';
 
+function isSafeRedirect(url: string): boolean {
+  if (!url) return false;
+  // Allow only relative paths (starting with /)
+  if (!url.startsWith('/')) return false;
+  // Prevent protocol-relative URLs //example.com
+  if (url.startsWith('//')) return false;
+  return true;
+}
+
 function SignInForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,7 +24,7 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
+  const callbackUrl = isSafeRedirect(searchParams.get('callbackUrl') ?? '') ? (searchParams.get('callbackUrl') as string) : '/dashboard';
   const registered = searchParams.get('registered');
 
   async function handleSubmit(e: React.FormEvent) {

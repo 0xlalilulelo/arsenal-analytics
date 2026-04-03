@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET() {
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const defaultRate = await prisma.laborRate.findFirst({
     where: { orgId, isDefault: true },
@@ -24,8 +20,8 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { laborRate, aogMultiplier } = body;

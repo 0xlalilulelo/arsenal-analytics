@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { classifyAgingBucket } from '@mro/core';
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET(_req: NextRequest) {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const now = new Date();
 
   const invoices = await prisma.invoice.findMany({
     where: {
-      orgId: org.id,
+      orgId,
       status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'OVERDUE'] },
     },
     include: {

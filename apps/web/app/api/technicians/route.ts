@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const technicians = await prisma.technician.findMany({
-    where: { orgId: org.id, active: true },
+    where: { orgId, active: true },
     select: { id: true, name: true, certifications: true, billRate: true, costRate: true },
     orderBy: { name: 'asc' },
   });
@@ -16,8 +17,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { name, certifications = [], billRate, costRate } = body;
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     const technician = await prisma.technician.create({
       data: {
-        orgId: org.id,
+        orgId,
         name: name.trim(),
         certifications: Array.isArray(certifications) ? certifications : [],
         billRate,

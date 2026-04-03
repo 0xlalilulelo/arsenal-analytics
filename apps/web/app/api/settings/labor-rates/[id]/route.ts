@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const rate = await prisma.laborRate.findFirst({ where: { id, orgId }, select: { id: true } });
     if (!rate) return NextResponse.json({ error: 'Rate not found' }, { status: 404 });
@@ -39,8 +35,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const rate = await prisma.laborRate.findFirst({ where: { id, orgId }, select: { id: true, isDefault: true } });
     if (!rate) return NextResponse.json({ error: 'Rate not found' }, { status: 404 });

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
-import type { QuoteStatus, BillingModel } from '@prisma/client';
+import type { QuoteStatus, BillingModel, QuoteLineCategory } from '@prisma/client';
+
+const VALID_LINE_CATEGORIES = new Set<string>(['LABOR', 'PARTS', 'MATERIALS', 'SUBCONTRACT', 'OTHER']);
 
 export async function GET(
   _req: NextRequest,
@@ -85,7 +87,7 @@ export async function PATCH(
           lines: {
             deleteMany: {},
             create: (lines as LineInput[]).map((l, idx) => ({
-              category: l.category as any,
+              category: (VALID_LINE_CATEGORIES.has(l.category) ? l.category : 'OTHER') as QuoteLineCategory,
               description: l.description,
               qty: l.qty,
               unitPrice: l.unitPrice,

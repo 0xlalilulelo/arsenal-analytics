@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import type { QuoteStatus, BillingModel } from '@prisma/client';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -14,8 +10,8 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1');
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
 
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const where = {
     orgId,
@@ -67,8 +63,8 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) return NextResponse.json({ error: 'customerId required' }, { status: 422 });
 
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Resolve labor rate — use provided or fall back to default
     let resolvedLaborRateId = laborRateId;

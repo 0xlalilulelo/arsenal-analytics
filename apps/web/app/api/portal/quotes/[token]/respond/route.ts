@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  // Rate-limit portal responses to prevent token brute-force (H3)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rl = rateLimit(`portal-respond:${ip}`, 20, 300); // 20 per 5 min
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const { token } = await params;
   const body = await request.json();
   const { action, approvedBy, declineReason } = body; // action: 'approve' | 'decline'

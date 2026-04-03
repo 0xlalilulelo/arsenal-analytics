@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { getOrgId } from '@/lib/get-org-id';
 
 /**
  * GET /api/reports/job-profitability
@@ -7,11 +8,11 @@ import { prisma } from '@mro/db';
  * Margin = (billed labor + billed parts) - (labor cost + parts cost) / billed total
  */
 export async function GET() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const closedWos = await prisma.workOrder.findMany({
-    where: { orgId: org.id, status: { in: ['INVOICED', 'CLOSED', 'COMPLETE'] } },
+    where: { orgId, status: { in: ['INVOICED', 'CLOSED', 'COMPLETE'] } },
     orderBy: { updatedAt: 'desc' },
     take: 20,
     select: {

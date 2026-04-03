@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrgId } from '@/lib/get-org-id';
 import { prisma } from '@mro/db';
 import { getMarkupBreakdown, type MarkupTier } from '@mro/core';
 
@@ -16,11 +17,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'unitCost must be a non-negative number' }, { status: 422 });
     }
 
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const rules = await prisma.markupRule.findMany({
-      where: { orgId: org.id },
+      where: { orgId },
       orderBy: { sortOrder: 'asc' },
     });
 

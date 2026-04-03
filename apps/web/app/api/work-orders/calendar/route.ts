@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { getOrgId } from '@/lib/get-org-id';
 import { prisma } from '@mro/db';
 
 /** GET /api/work-orders/calendar?year=2025&month=3 */
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  const orgId = (session?.user as { orgId?: string })?.orgId;
-
-  // Fallback for dev: use first org
-  const resolvedOrgId = orgId ?? (await prisma.organization.findFirst({ select: { id: true } }))?.id;
+  const resolvedOrgId = await getOrgId();
   if (!resolvedOrgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

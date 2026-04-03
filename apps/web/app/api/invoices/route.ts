@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import type { InvoiceStatus } from '@prisma/client';
 import { addDays } from 'date-fns';
+import { getOrgId } from '@/lib/get-org-id';
 
 const TERMS_DAYS: Record<string, number> = { NET_15: 15, NET_30: 30, NET_45: 45, COD: 0, PREPAY: 0 };
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,14 +13,8 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1');
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
 
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
-
-  // Lazily mark overdue: SENT/VIEWED invoices past their due date become OVERDUE
-  await prisma.invoice.updateMany({
-    where: { orgId, status: { in: ['SENT', 'VIEWED'] }, dueDate: { lt: new Date() } },
-    data: { status: 'OVERDUE' },
-  }).catch(() => {/* non-critical, don't fail the request */});
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const [invoices, total] = await Promise.all([
     prisma.invoice.findMany({
@@ -51,8 +41,8 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) return NextResponse.json({ error: 'customerId is required' }, { status: 400 });
 
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const [customer, org] = await Promise.all([
       prisma.customer.findUnique({ where: { id: customerId }, select: { billingTerms: true } }),

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSessionUser } from '@/lib/get-org-id';
+import { hasRole } from '@/lib/rbac';
 import { prisma } from '@mro/db';
 
 /**
@@ -15,6 +17,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || !hasRole(sessionUser.role, 'MANAGER')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const { depositCollected } = body;
@@ -45,7 +52,7 @@ export async function POST(
     }
 
     // Resolve labor rate — use quote's rate or fall back to default
-    const org = await prisma.organization.findFirst({ select: { id: true } });
+    const org = await prisma.organization.findUnique({ where: { id: sessionUser.orgId }, select: { id: true } });
     if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 
     let laborRateId = quote.laborRateId;

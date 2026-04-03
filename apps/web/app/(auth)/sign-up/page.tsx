@@ -21,7 +21,7 @@ export default function SignUpPage() {
     e.preventDefault();
     setError('');
 
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (password.length < 12) { setError('Password must be at least 12 characters'); return; }
     if (password !== confirm) { setError('Passwords do not match'); return; }
 
     setLoading(true);
@@ -104,10 +104,10 @@ export default function SignUpPage() {
                   onChange={e => setPassword(e.target.value)}
                   className="mt-1.5 h-9"
                   autoComplete="new-password"
-                  minLength={8}
+                  minLength={12}
                   required
                 />
-                <p className="mt-1 text-xs text-content-muted">Minimum 8 characters</p>
+                <p className="mt-1 text-xs text-content-muted">Minimum 12 characters</p>
               </div>
               <div>
                 <Label className="text-xs">Confirm password</Label>
@@ -117,7 +117,7 @@ export default function SignUpPage() {
                   onChange={e => setConfirm(e.target.value)}
                   className="mt-1.5 h-9"
                   autoComplete="new-password"
-                  minLength={8}
+                  minLength={12}
                   required
                 />
               </div>

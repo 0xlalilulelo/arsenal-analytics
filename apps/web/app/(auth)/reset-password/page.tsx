@@ -32,7 +32,7 @@ function ResetPasswordForm() {
     e.preventDefault();
     setError('');
     if (password !== confirm) { setError('Passwords do not match'); return; }
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (password.length < 12) { setError('Password must be at least 12 characters'); return; }
 
     setLoading(true);
     try {
@@ -71,7 +71,7 @@ function ResetPasswordForm() {
           value={password}
           onChange={e => setPassword(e.target.value)}
           className="mt-1.5 h-9"
-          minLength={8}
+          minLength={12}
           required
           autoFocus
         />
@@ -84,7 +84,7 @@ function ResetPasswordForm() {
           value={confirm}
           onChange={e => setConfirm(e.target.value)}
           className="mt-1.5 h-9"
-          minLength={8}
+          minLength={12}
           required
         />
       </div>
@@ -110,7 +110,7 @@ export default function ResetPasswordPage() {
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-sm">Choose a new password</CardTitle>
-            <CardDescription className="text-xs">Must be at least 8 characters.</CardDescription>
+            <CardDescription className="text-xs">Must be at least 12 characters.</CardDescription>
           </CardHeader>
           <CardContent>
             <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-content-muted mx-auto" />}>

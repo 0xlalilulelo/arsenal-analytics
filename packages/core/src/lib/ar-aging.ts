@@ -1,6 +1,14 @@
 export type AgingBucket = 'current' | '1-30' | '31-60' | '61-90' | '90+';
 export type AgingBucketV2 = 'CURRENT' | '1_30' | '31_60' | '61_90' | '90_PLUS';
 
+/**
+ * Bucket boundaries are right-inclusive:
+ *   CURRENT: daysOverdue <= 0
+ *   1_30:    1 <= daysOverdue <= 30
+ *   31_60:   31 <= daysOverdue <= 60
+ *   61_90:   61 <= daysOverdue <= 90
+ *   90_PLUS: daysOverdue > 90
+ */
 /** V2 API returning uppercase bucket names used by analytics routes */
 export function classifyAgingBucket(dueDate: Date, asOf = new Date()): AgingBucketV2 {
   const daysOverdue = Math.floor(

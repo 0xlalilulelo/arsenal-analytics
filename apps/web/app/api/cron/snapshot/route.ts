@@ -6,6 +6,12 @@ import { classifyAgingBucket } from '@mro/core';
 // Captures FPASnapshot and CashFlowSnapshot for the current month.
 // Run once per month (or on-demand) to populate historical trend data.
 export async function POST(_req: NextRequest) {
+  const authHeader = _req.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const org = await prisma.organization.findFirst({ select: { id: true } });
     if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
@@ -108,5 +114,10 @@ export async function POST(_req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return POST(req);
 }

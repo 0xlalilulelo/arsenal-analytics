@@ -29,13 +29,17 @@ export function findMarkupTier(
 ): MarkupTier {
   const tiers = orgRules && orgRules.length > 0 ? orgRules : DEFAULT_MARKUP_TIERS;
   const sorted = [...tiers].sort((a, b) => a.minCost - b.minCost);
-  let match = sorted[0];
+
+  // Find the first tier where unitCost falls within [minCost, maxCost)
+  // (maxCost is exclusive upper bound; null maxCost means unbounded)
   for (const tier of sorted) {
-    if (unitCost >= tier.minCost) {
-      match = tier;
+    if (unitCost >= tier.minCost && (tier.maxCost === null || unitCost < tier.maxCost)) {
+      return tier;
     }
   }
-  return match;
+
+  // Fallback: return the highest tier (covers edge cases like unitCost === maxCost of last tier)
+  return sorted[sorted.length - 1];
 }
 
 /**

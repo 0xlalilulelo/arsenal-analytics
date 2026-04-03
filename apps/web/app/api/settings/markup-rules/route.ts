@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { DEFAULT_MARKUP_TIERS } from '@mro/core';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET() {
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let rules = await prisma.markupRule.findMany({
     where: { orgId },
@@ -42,8 +38,8 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { rules } = body;

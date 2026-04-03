@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
+import { getOrgId } from '@/lib/get-org-id';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -7,12 +8,12 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type');
   const status = searchParams.get('status'); // 'open' | 'completed' | 'all'
 
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const items = await prisma.complianceItem.findMany({
     where: {
-      workOrder: { orgId: org.id },
+      workOrder: { orgId },
       ...(type && type !== 'ALL' ? { type: type as any } : {}),
       ...(status === 'open' ? { completedAt: null } : {}),
       ...(status === 'completed' ? { completedAt: { not: null } } : {}),
@@ -39,8 +40,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const { workOrderId, type, referenceId, description, form337Required, documentUrls } = body;

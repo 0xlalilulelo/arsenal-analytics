@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import { startOfMonth, subMonths, startOfYear } from 'date-fns';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId } from '@/lib/get-org-id';
 
 /** Map date range label → start date */
 function resolveStartDate(range: string): Date {
@@ -33,8 +29,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const range = searchParams.get('range') ?? 'this-month';
 
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const startDate = resolveStartDate(range);
   const endDate = resolveEndDate(range);

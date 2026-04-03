@@ -1,5 +1,8 @@
 import { jwtVerify } from 'jose';
 
+if (!process.env.AUTH_SECRET) {
+  console.error('[mobile-auth] AUTH_SECRET environment variable is not set');
+}
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? '');
 
 export interface MobileTokenPayload {

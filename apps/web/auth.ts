@@ -18,9 +18,6 @@ async function verifyCredentials(email: string, password: string) {
     return valid ? user : null;
   }
 
-  // Seeded demo users have no password hash — allow in development only
-  if (process.env.NODE_ENV === 'development') return user;
-
   return null;
 }
 

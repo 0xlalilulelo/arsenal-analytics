@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
 import type { WorkOrderStatus, WorkOrderType } from '@prisma/client';
 import { calculateAOGCallout, AOG_MULTIPLIER, AOG_MINIMUM_HOURS, AOG_DEFAULT_MILEAGE_RATE, AOG_DEFAULT_DRIVE_RATE } from '@mro/core';
-
-async function resolveOrgId() {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
+import { getOrgId, getSessionUser } from '@/lib/get-org-id';
+import { hasRole } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -16,8 +13,8 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1');
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
 
-  const orgId = await resolveOrgId();
-  if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+  const orgId = await getOrgId();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const [workOrders, total] = await Promise.all([
     prisma.workOrder.findMany({
@@ -57,10 +54,30 @@ export async function POST(request: NextRequest) {
       lineItems = [],
       // AOG-specific fields
       aogLocation, aogMileage = 0, aogDriveHours = 0, aogTechCount = 1,
+      estHours,
     } = body;
 
-    const orgId = await resolveOrgId();
-    if (!orgId) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
+    const orgId = await getOrgId();
+    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || !hasRole(sessionUser.role, 'MANAGER')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Numeric bounds validation
+    if (typeof aogMileage === 'number' && (aogMileage < 0 || aogMileage > 10000)) {
+      return NextResponse.json({ error: 'aogMileage must be between 0 and 10000' }, { status: 422 });
+    }
+    if (typeof aogDriveHours === 'number' && (aogDriveHours < 0 || aogDriveHours > 24)) {
+      return NextResponse.json({ error: 'aogDriveHours must be between 0 and 24' }, { status: 422 });
+    }
+    if (typeof aogTechCount === 'number' && (aogTechCount < 1 || aogTechCount > 20)) {
+      return NextResponse.json({ error: 'aogTechCount must be between 1 and 20' }, { status: 422 });
+    }
+    if (estHours !== undefined && (typeof estHours !== 'number' || estHours < 0 || estHours > 999)) {
+      return NextResponse.json({ error: 'estHours must be between 0 and 999' }, { status: 422 });
+    }
 
     // Resolve aircraft
     let resolvedAircraftId = aircraftId;
@@ -166,8 +183,20 @@ export async function POST(request: NextRequest) {
       sortOrder: autoLineItems.length + idx,
     }));
 
+    // Compute per-line totals up front so estimatedTotal sums them all correctly
+    const autoLineItemsWithTotal = autoLineItems.map(li => {
+      let total: number;
+      if (li.taskNumber === 'TASK-002') {
+        // Mileage line: estHours=0, laborRate=0 — actual cost is miles * mileageRate
+        total = aogMileage * AOG_DEFAULT_MILEAGE_RATE;
+      } else {
+        total = li.estHours * li.laborRate;
+      }
+      return { ...li, total };
+    });
+
     const estimatedTotal = type === 'AOG'
-      ? autoLineItems.reduce((s, li) => s + li.estHours * li.laborRate, 0)
+      ? autoLineItemsWithTotal.reduce((s, li) => s + li.total, 0)
       : undefined;
 
     const wo = await prisma.workOrder.create({

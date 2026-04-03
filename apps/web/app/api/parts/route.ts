@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { getOrgId } from '@/lib/get-org-id';
 import { prisma } from '@mro/db';
-
-async function resolveOrgId() {
-  const session = await auth();
-  const orgId = (session?.user as { orgId?: string })?.orgId;
-  return orgId ?? (await prisma.organization.findFirst({ select: { id: true } }))?.id ?? null;
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -16,7 +10,7 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') ?? '1');
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
 
-  const orgId = await resolveOrgId();
+  const orgId = await getOrgId();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const where = {
@@ -65,10 +59,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const orgId = await resolveOrgId();
+    const orgId = await getOrgId();
     if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
-    const part = await prisma.part.create({ data: { orgId, ...body } });
+    const {
+      partNumber, description, category, manufacturer,
+      qtyOnHand, unitCost, unitBillPrice, markupPct,
+      bin, notes, reorderPoint, reorderQty,
+    } = body;
+    const part = await prisma.part.create({
+      data: {
+        orgId,
+        ...(partNumber !== undefined ? { partNumber } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(category !== undefined ? { category } : {}),
+        ...(manufacturer !== undefined ? { manufacturer } : {}),
+        ...(qtyOnHand !== undefined ? { qtyOnHand } : {}),
+        ...(unitCost !== undefined ? { unitCost } : {}),
+        ...(unitBillPrice !== undefined ? { unitBillPrice } : {}),
+        ...(markupPct !== undefined ? { markupPct } : {}),
+        ...(bin !== undefined ? { bin } : {}),
+        ...(notes !== undefined ? { notes } : {}),
+        ...(reorderPoint !== undefined ? { reorderPoint } : {}),
+        ...(reorderQty !== undefined ? { reorderQty } : {}),
+      },
+    });
     return NextResponse.json({ data: part }, { status: 201 });
   } catch (e) {
     console.error(e);

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
 import { prisma } from '@mro/db';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const ip = _req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rl = rateLimit(`portal-quote:${ip}`, 30, 300); // 30 per 5 min
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
   const { token } = await params;
 
   const quote = await prisma.quote.findFirst({
