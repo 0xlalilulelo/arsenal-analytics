@@ -267,7 +267,7 @@ WEEK 2  Phase 4 (accounts + smoke test) — final gate before field handoff
 
 | Variable | Value | Where to get it |
 |---|---|---|
-| `AUTH_SECRET` | `kypz7h9pVz4AXRbcuN+rS+5+cB6IA1NIQbwdMJwVfNI=` | Already set (promote scope) |
+| `AUTH_SECRET` | `<generate with: openssl rand -base64 32>` | Already set (promote scope) — **rotate if exposed** |
 | `AUTH_URL` | `https://arsenal-analytics.vercel.app` | Already set (promote scope) |
 | `DATABASE_URL` | `postgresql://...` | Already set (promote scope) |
 | `NEXT_PUBLIC_APP_URL` | `https://arsenal-analytics.vercel.app` | Same as AUTH_URL |
