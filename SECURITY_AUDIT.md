@@ -358,11 +358,99 @@ Several list endpoints (`GET /api/work-orders`, `GET /api/invoices`, `GET /api/p
 
 ---
 
+---
+
+## Code Quality & Business Logic Findings
+
+These are not security vulnerabilities per se, but bugs and correctness issues that affect financial data integrity.
+
+### BL1. Payment Recording Race Condition (HIGH)
+
+**File:** `apps/web/app/api/invoices/[id]/payments/route.ts` (lines 24-47)
+
+Payment validation reads `invoice.payments`, checks remaining balance, then creates a new payment in separate queries. Two concurrent payments can both pass validation, causing over-payment or double PAID status.
+
+**Fix:** Wrap in `prisma.$transaction()` with fresh reads inside the transaction.
+
+---
+
+### BL2. AR Aging Bucket Boundary Ambiguity (HIGH)
+
+**File:** `packages/core/src/lib/ar-aging.ts` (lines 5-14)
+
+Day 30 falls in `1_30`, day 60 in `31_60`. Boundaries use `<=` which is correct, but bucket names suggest exclusive upper bounds. More importantly, DST and month-length variations make day calculations imprecise.
+
+**Fix:** Rename buckets to `0_30`, `31_60`, `61_90`, `90_PLUS` to match actual logic.
+
+---
+
+### BL3. Markup Sliding Scale Fragile for Gaps (HIGH)
+
+**File:** `packages/core/src/lib/markup-calculator.ts` (lines 26-39)
+
+`findMarkupTier()` loops through sorted tiers matching `unitCost >= tier.minCost` and takes the last match. Works by luck of sort order, but breaks if tiers have gaps (e.g., no tier covers $25-$500).
+
+**Fix:** Check both `minCost` and `maxCost` in the tier match.
+
+---
+
+### BL4. AOG Drive Time Not Multiplied (HIGH)
+
+**File:** `packages/core/src/lib/aog-billing.ts` (line 68)
+
+Drive time is billed at flat `$70/hr` regardless of AOG status. Industry standard applies 1.5x multiplier to ALL billable time during AOG events, including drive time.
+
+**Fix:** Apply `driveRate * AOG_MULTIPLIER` for AOG callouts.
+
+---
+
+### BL5. AOG Estimated Total Only Sums Labor Hours (MEDIUM)
+
+**File:** `apps/web/app/api/work-orders/route.ts` (lines 169-171)
+
+`estimatedTotal` for AOG work orders sums only `estHours * laborRate` from auto-generated line items, ignoring mileage and drive time line items. AOG estimates are ~60% too low.
+
+**Fix:** Sum all line item totals (labor + mileage + drive time).
+
+---
+
+### BL6. Floating-Point Currency Arithmetic (MEDIUM)
+
+**File:** `apps/web/app/api/invoices/[id]/payments/route.ts` (lines 11-27)
+
+Payment validation uses `amount > remaining + 0.01` with floating-point tolerance. Over multiple payments, rounding errors accumulate.
+
+**Fix:** Use integer cents for all financial calculations, or use `Decimal.js`.
+
+---
+
+### BL7. Double-Submit on Payment Form (MEDIUM)
+
+**File:** `apps/web/components/invoices/PaymentDialog.tsx` (lines 35-58)
+
+`handleSubmit` sets `isSubmitting = true` but doesn't guard against re-entry. Fast double-click can fire two requests before state updates.
+
+**Fix:** Add `if (isSubmitting) return;` at top of handler.
+
+---
+
+### BL8. Invoice OVERDUE Transition in Read Path (MEDIUM)
+
+**File:** `apps/web/app/api/invoices/route.ts` (lines 24-27)
+
+`GET /api/invoices` auto-marks overdue invoices during reads. Side effects in GET requests are an anti-pattern and cause concurrent status update issues.
+
+**Fix:** Move to the `mark-overdue` cron job (already exists but unauthenticated).
+
+---
+
 ## Summary of Counts
 
 | Severity | Count | Status |
 |----------|-------|--------|
-| CRITICAL | 5 | Must fix before field testing |
-| HIGH | 10 | Should fix before field testing |
-| MEDIUM | 8 | Fix during stabilization |
-| **Total** | **23** | |
+| CRITICAL (Security) | 5 | Must fix before field testing |
+| HIGH (Security) | 10 | Should fix before field testing |
+| HIGH (Business Logic) | 4 | Should fix before field testing |
+| MEDIUM (Security) | 8 | Fix during stabilization |
+| MEDIUM (Business Logic) | 4 | Fix during stabilization |
+| **Total** | **31** | |
