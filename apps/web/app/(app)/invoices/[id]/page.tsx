@@ -30,7 +30,7 @@ const STATUS_VARIANT: Record<string, 'complete' | 'in-progress' | 'open' | 'aog'
 };
 
 export default function InvoiceDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>()!;
   const { data: inv, isLoading, isError } = useInvoiceDetail(id);
   const { mutateAsync: recordPayment, isPending: paymentPending } = useRecordPayment(id);
   const { mutateAsync: updateInvoice, isPending: sendPending } = useUpdateInvoice(id);

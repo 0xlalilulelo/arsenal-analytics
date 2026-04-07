@@ -52,7 +52,7 @@ export function AppSidebar() {
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         <ul className="space-y-0.5">
           {navItems.map(({ href, label, icon: Icon, highlight }) => {
-            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+            const active = pathname === href || (href !== '/dashboard' && (pathname?.startsWith(href) ?? false));
             return (
               <li key={href}>
                 <Link
@@ -77,7 +77,7 @@ export function AppSidebar() {
       {/* Bottom: settings */}
       <div className="border-t border-surface-hover py-3 px-2">
         {settingsItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active = pathname?.startsWith(href) ?? false;
           return (
             <Link
               key={href}

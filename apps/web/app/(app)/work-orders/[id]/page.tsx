@@ -108,7 +108,7 @@ export default function WorkOrderDetailPage() {
   const [ciDesc, setCiDesc] = useState('');
   const [ciForm337, setCiForm337] = useState(false);
 
-  const { id: workOrderId } = useParams<{ id: string }>();
+  const { id: workOrderId } = useParams<{ id: string }>()!;
   const router = useRouter();
   const qc = useQueryClient();
 
