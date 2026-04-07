@@ -152,7 +152,7 @@ export function CommsTab({
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-content-primary">Email Threads</h3>
           {(data?.pendingCount ?? 0) > 0 && (
-            <Badge variant="destructive" className="text-xs h-5 px-1.5">
+            <Badge variant="overdue" className="text-xs h-5 px-1.5">
               {data!.pendingCount} pending
             </Badge>
           )}

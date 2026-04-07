@@ -481,7 +481,7 @@ export default function WorkOrderDetailPage() {
               <TabsTrigger value="comms" className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" />Comms
                 {pendingCommsCount > 0 && (
-                  <Badge variant="destructive" className="ml-1 h-4 px-1 text-xs">{pendingCommsCount}</Badge>
+                  <Badge variant="overdue" className="ml-1 h-4 px-1 text-xs">{pendingCommsCount}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="history" className="gap-1.5"><History className="h-3.5 w-3.5" />History</TabsTrigger>

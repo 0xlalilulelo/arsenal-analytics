@@ -64,24 +64,29 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       partNumber, description, category, manufacturer,
-      qtyOnHand, unitCost, unitBillPrice, markupPct,
+      qtyOnHand, unitCost, markupPct,
       bin, notes, reorderPoint, reorderQty,
     } = body;
+    if (!partNumber || typeof partNumber !== 'string') {
+      return NextResponse.json({ error: 'partNumber is required' }, { status: 400 });
+    }
+    if (!description || typeof description !== 'string') {
+      return NextResponse.json({ error: 'description is required' }, { status: 400 });
+    }
     const part = await prisma.part.create({
       data: {
         orgId,
-        ...(partNumber !== undefined ? { partNumber } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(category !== undefined ? { category } : {}),
-        ...(manufacturer !== undefined ? { manufacturer } : {}),
-        ...(qtyOnHand !== undefined ? { qtyOnHand } : {}),
-        ...(unitCost !== undefined ? { unitCost } : {}),
-        ...(unitBillPrice !== undefined ? { unitBillPrice } : {}),
-        ...(markupPct !== undefined ? { markupPct } : {}),
-        ...(bin !== undefined ? { bin } : {}),
-        ...(notes !== undefined ? { notes } : {}),
-        ...(reorderPoint !== undefined ? { reorderPoint } : {}),
-        ...(reorderQty !== undefined ? { reorderQty } : {}),
+        partNumber: partNumber as string,
+        description: description as string,
+        category: category ?? null,
+        manufacturer: manufacturer ?? null,
+        qtyOnHand: qtyOnHand ?? 0,
+        unitCost: unitCost ?? 0,
+        markupPct: markupPct ?? 0,
+        bin: bin ?? null,
+        notes: notes ?? null,
+        reorderPoint: reorderPoint ?? null,
+        reorderQty: reorderQty ?? null,
       },
     });
     return NextResponse.json({ data: part }, { status: 201 });
