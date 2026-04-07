@@ -48,7 +48,7 @@ export async function replayQueue(): Promise<{ succeeded: number; failed: number
     try {
       if (item.type === 'logLabor') {
         const { workOrderId, ...rest } = item.payload;
-        await api.workOrders.logLabor(workOrderId as string, rest as Parameters<typeof api.workOrders.logLabor>[1]);
+        await api.workOrders.logLabor(workOrderId as string, rest as unknown as Parameters<typeof api.workOrders.logLabor>[1]);
       } else if (item.type === 'markTaskComplete') {
         const { workOrderId, lineItemId } = item.payload;
         await api.workOrders.updateLineItemStatus(workOrderId as string, lineItemId as string, 'COMPLETE');

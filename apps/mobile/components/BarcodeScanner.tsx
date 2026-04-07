@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView as _CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera';
+// expo-camera@17 CameraView uses forwardRef; @types/react@19 requires `refs` on class
+// components which forwardRef components don't have — cast to any to unblock the type check.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CameraView = _CameraView as any;
 import { colors } from '@mro/tokens';
 
 interface BarcodeScannerProps {
@@ -9,9 +13,7 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
-const BARCODE_TYPES: Parameters<typeof CameraView>[0]['barcodeScannerSettings'] = {
-  barcodeTypes: ['code128', 'code39', 'code93', 'ean13', 'ean8', 'qr', 'upc_e'],
-};
+const BARCODE_TYPES: BarcodeType[] = ['code128', 'code39', 'code93', 'ean13', 'ean8', 'qr', 'upc_e'];
 
 export function BarcodeScanner({ visible, onScanned, onClose }: BarcodeScannerProps) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -48,11 +50,11 @@ export function BarcodeScanner({ visible, onScanned, onClose }: BarcodeScannerPr
       <View style={styles.container}>
         <CameraView
           style={styles.camera}
-          barcodeScannerSettings={BARCODE_TYPES}
+          barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
           onBarcodeScanned={
             scanned
               ? undefined
-              : ({ data }) => {
+              : ({ data }: { data: string }) => {
                   setScanned(true);
                   onScanned(data);
                 }

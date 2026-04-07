@@ -1,5 +1,5 @@
 import type { ApiClient } from '../client';
-import type { PaginatedResponse, WorkOrderSummary, WorkOrderDetail, WorkOrderLineItem } from '../types';
+import type { PaginatedResponse, WorkOrderSummary, WorkOrderDetail, WorkOrderLineItem, Squawk } from '../types';
 
 export interface WorkOrderFilters {
   status?: string;
