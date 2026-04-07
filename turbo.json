@@ -5,7 +5,35 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "AUTH_SECRET",
+        "AUTH_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "RESEND_API_KEY",
+        "RESEND_FROM_EMAIL",
+        "CRON_SECRET",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "BLOB_READ_WRITE_TOKEN",
+        "POSTGRES_URL",
+        "POSTGRES_URL_NON_POOLING",
+        "POSTGRES_URL_NO_SSL",
+        "POSTGRES_PRISMA_URL",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_HOST",
+        "POSTGRES_DATABASE",
+        "PGUSER",
+        "PGPASSWORD",
+        "PGHOST",
+        "PGHOST_UNPOOLED",
+        "PGDATABASE",
+        "NEON_PROJECT_ID"
+      ]
     },
     "dev": {
       "cache": false,
