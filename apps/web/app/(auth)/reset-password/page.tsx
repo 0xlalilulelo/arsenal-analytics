@@ -10,7 +10,7 @@ import { Plane, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  const token = searchParams?.get('token');
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');

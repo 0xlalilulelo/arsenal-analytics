@@ -16,7 +16,7 @@ import {
 
 function ForbiddenBanner() {
   const sp = useSearchParams();
-  if (sp.get('error') !== 'forbidden') return null;
+  if (sp?.get('error') !== 'forbidden') return null;
   return (
     <div className="mx-6 mt-4 rounded-lg border border-intent-danger/30 bg-intent-danger/10 px-4 py-3 text-sm text-intent-danger">
       You don&apos;t have permission to access that page.

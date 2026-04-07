@@ -24,8 +24,8 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = isSafeRedirect(searchParams.get('callbackUrl') ?? '') ? (searchParams.get('callbackUrl') as string) : '/dashboard';
-  const registered = searchParams.get('registered');
+  const callbackUrl = isSafeRedirect(searchParams?.get('callbackUrl') ?? '') ? (searchParams?.get('callbackUrl') as string) : '/dashboard';
+  const registered = searchParams?.get('registered');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

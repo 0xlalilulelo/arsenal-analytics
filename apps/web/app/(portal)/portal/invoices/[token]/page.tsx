@@ -55,7 +55,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 export default function PortalInvoicePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const searchParams = useSearchParams();
-  const paymentStatus = searchParams.get('payment');
+  const paymentStatus = searchParams?.get('payment');
   const { data, isLoading, error } = usePortalInvoice(token);
   const [checkoutPending, setCheckoutPending] = useState(false);
 
