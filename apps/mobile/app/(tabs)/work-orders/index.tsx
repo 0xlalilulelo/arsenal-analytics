@@ -76,7 +76,14 @@ function WorkOrderRow({ item }: { item: WorkOrderSummary }) {
       onPress={() => router.push(`/(tabs)/work-orders/${item.id}`)}
     >
       <View style={styles.rowTop}>
-        <Text style={styles.woNumber}>{item.number}</Text>
+        <View style={styles.woNumberRow}>
+          <Text style={styles.woNumber}>{item.number}</Text>
+          {item._count.communications > 0 && (
+            <View style={styles.commsBadge}>
+              <Text style={styles.commsBadgeText}>✉ {item._count.communications}</Text>
+            </View>
+          )}
+        </View>
         <Badge label={item.status.replace('_', ' ')} variant={workOrderStatusVariant(item.status)} />
       </View>
       <Text style={styles.customerName}>{item.customer.name}</Text>
@@ -155,11 +162,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  woNumberRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   woNumber: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.content.primary,
   },
+  commsBadge: {
+    backgroundColor: colors.intent.danger + '22',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.intent.danger + '66',
+  },
+  commsBadgeText: { fontSize: 11, fontWeight: '700', color: colors.intent.danger },
   customerName: {
     fontSize: 14,
     color: colors.content.secondary,

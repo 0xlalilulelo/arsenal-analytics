@@ -13,7 +13,7 @@ export type WorkOrderSummary = {
   actualTotal: number | null;
   dateOpened: string;
   estimatedClose: string | null;
-  _count: { laborEntries: number; squawks: number; partRequests: number };
+  _count: { laborEntries: number; squawks: number; partRequests: number; communications: number };
 };
 
 export type WorkOrderDetail = {

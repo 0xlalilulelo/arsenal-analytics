@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
+import { CommsTab } from '@/components/work-orders/CommsTab';
+import { useWorkOrderComms } from '@/hooks/useWorkOrderCommunications';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
 import { useCurrentUser } from '@/hooks/use-current-user';
@@ -24,7 +26,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
-  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw,
+  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw, Mail,
 } from 'lucide-react';
 
 const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
@@ -120,6 +122,9 @@ export default function WorkOrderDetailPage() {
     enabled: !!workOrderId,
   });
   const auditLogs = historyData?.data ?? [];
+
+  const { data: commsData } = useWorkOrderComms(workOrderId);
+  const pendingCommsCount = commsData?.pendingCount ?? 0;
 
   const { mutateAsync: updatePartStatus } = useMutation({
     mutationFn: async ({ partRequestId, status }: { partRequestId: string; status: string }) => {
@@ -473,6 +478,12 @@ export default function WorkOrderDetailPage() {
               <TabsTrigger value="parts" className="gap-1.5"><Package className="h-3.5 w-3.5" />Parts</TabsTrigger>
               <TabsTrigger value="billing" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Billing</TabsTrigger>
               <TabsTrigger value="compliance" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Compliance</TabsTrigger>
+              <TabsTrigger value="comms" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" />Comms
+                {pendingCommsCount > 0 && (
+                  <Badge variant="destructive" className="ml-1 h-4 px-1 text-xs">{pendingCommsCount}</Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="history" className="gap-1.5"><History className="h-3.5 w-3.5" />History</TabsTrigger>
             </TabsList>
 
@@ -889,6 +900,15 @@ export default function WorkOrderDetailPage() {
                   </div>
                 ))}
               </div>
+            </TabsContent>
+
+            {/* ── Comms ─────────────────────────────────────────────────────── */}
+            <TabsContent value="comms">
+              <CommsTab
+                workOrderId={wo.id}
+                workOrderNumber={wo.number}
+                customerEmail={wo.customer.email ?? undefined}
+              />
             </TabsContent>
 
             {/* ── History ───────────────────────────────────────────────────── */}

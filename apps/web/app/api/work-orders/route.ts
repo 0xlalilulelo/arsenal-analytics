@@ -31,7 +31,14 @@ export async function GET(request: NextRequest) {
       include: {
         customer: { select: { name: true, accountNumber: true } },
         aircraft: { select: { nNumber: true, make: true, model: true } },
-        _count: { select: { laborEntries: true, squawks: true, partRequests: true } },
+        _count: {
+          select: {
+            laborEntries: true,
+            squawks: true,
+            partRequests: true,
+            communications: { where: { status: 'AWAITING_REPLY' } },
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
       skip: (page - 1) * limit,

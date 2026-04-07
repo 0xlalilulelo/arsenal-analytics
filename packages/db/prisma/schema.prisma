@@ -40,6 +40,7 @@ model Organization {
   aogEvents        AOGEvent[]
   fpaSnapshots     FPASnapshot[]
   cashFlowSnapshots CashFlowSnapshot[]
+  communications   WorkOrderCommunication[]
 }
 
 // ─── Auth (NextAuth v5 / Auth.js) ────────────────────────────────────────────
@@ -61,6 +62,7 @@ model User {
   technicianProfile Technician?
   userInvites       UserInvite[] @relation("InvitedByUser")
   pushTokens        PushToken[]
+  communications    WorkOrderCommunication[]
 }
 
 model PushToken {
@@ -218,6 +220,7 @@ model WorkOrder {
   invoices        Invoice[]
   milestones      BillingMilestone[]
   complianceItems ComplianceItem[]
+  communications  WorkOrderCommunication[]
 }
 
 enum WorkOrderType {
@@ -614,6 +617,42 @@ enum ComplianceType {
   MAJOR_ALTERATION
   DER
   OTHER
+}
+
+// ─── Work Order Communications ───────────────────────────────────────────────
+
+model WorkOrderCommunication {
+  id           String         @id @default(cuid())
+  orgId        String
+  org          Organization   @relation(fields: [orgId], references: [id])
+  workOrderId  String
+  workOrder    WorkOrder      @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  subject      String
+  direction    CommDirection
+  status       CommStatus
+  contactName  String?
+  contactEmail String?
+  notes        String?        // max 2,000 chars enforced at API layer
+  occurredAt   DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdById  String?
+  createdBy    User?          @relation(fields: [createdById], references: [id])
+
+  @@index([workOrderId, status])
+  @@index([orgId, status])
+}
+
+enum CommDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommStatus {
+  AWAITING_REPLY
+  REPLIED
+  RESOLVED
+  INFO_ONLY
 }
 
 // ─── Quotes / Estimates ───────────────────────────────────────────────────────

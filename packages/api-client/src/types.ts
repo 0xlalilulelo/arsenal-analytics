@@ -54,7 +54,7 @@ export interface WorkOrderSummary {
   estimatedTotal: number | null;
   customer: { name: string; accountNumber: string | null };
   aircraft: { nNumber: string; make: string; model: string };
-  _count: { laborEntries: number; squawks: number; partRequests: number };
+  _count: { laborEntries: number; squawks: number; partRequests: number; communications: number };
 }
 
 export interface WorkOrderLineItem {
@@ -150,6 +150,37 @@ export interface InvoiceSummary {
   customer: { name: string; accountNumber: string | null };
   workOrder: { number: string } | null;
   _count: { payments: number };
+}
+
+// ---- Communications ----
+export interface WorkOrderComm {
+  id: string;
+  workOrderId: string;
+  subject: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  status: 'AWAITING_REPLY' | 'REPLIED' | 'RESOLVED' | 'INFO_ONLY';
+  contactName: string | null;
+  contactEmail: string | null;
+  notes: string | null;
+  occurredAt: string;
+  createdAt: string;
+  createdBy: { id: string; name: string | null } | null;
+}
+
+export interface CommsResponse {
+  data: WorkOrderComm[];
+  pendingCount: number;
+  workOrderNumber: string;
+}
+
+export interface CreateCommInput {
+  subject: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  status: 'AWAITING_REPLY' | 'REPLIED' | 'RESOLVED' | 'INFO_ONLY';
+  contactName?: string;
+  contactEmail?: string;
+  notes?: string;
+  occurredAt?: string;
 }
 
 export interface InvoiceLineItem {

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { Search, Plus, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Plus, ChevronRight, Loader2, Mail } from 'lucide-react';
 import type { BadgeProps } from '@/components/ui/badge';
 import { useWorkOrders } from '@/hooks/useWorkOrders';
 import type { WorkOrderSummary } from '@/hooks/useWorkOrders';
@@ -138,9 +138,17 @@ export function WorkOrdersTable() {
             {!isLoading && workOrders.map(wo => (
               <tr key={wo.id} className="hover:bg-surface-hover/40 transition-colors group">
                 <td className="py-3 px-4">
-                  <Link href={`/work-orders/${wo.id}`} className="font-mono text-xs font-semibold text-intent-primary hover:underline">
-                    {wo.number}
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link href={`/work-orders/${wo.id}`} className="font-mono text-xs font-semibold text-intent-primary hover:underline">
+                      {wo.number}
+                    </Link>
+                    {wo._count.communications > 0 && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-intent-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-intent-danger">
+                        <Mail className="h-2.5 w-2.5" />
+                        {wo._count.communications}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-3 px-4">
                   <p className="text-xs font-medium text-content-primary">{wo.customer.name}</p>

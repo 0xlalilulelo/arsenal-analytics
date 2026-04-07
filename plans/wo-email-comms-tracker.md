@@ -255,14 +255,14 @@ list badge.
 
 ## Implementation Phases
 
-### Phase 1 — Core (ship for field testing)
+### Phase 1 + 2 — Ship Together (field testing)
+Mobile ships simultaneously with web given technicians are the primary persona.
+
 1. DB migration: add `WorkOrderCommunication` model + enums
 2. API routes: GET, POST, PATCH, DELETE
 3. Web: Communications tab + Log Thread dialog
 4. Web: WO list pending-reply badge
 5. WO reference tag copy button
-
-### Phase 2 — Mobile
 6. Mobile: Comms section in WO detail screen
 7. Mobile: Log Thread bottom sheet
 8. Mobile: Swipe gestures (mark replied / edit)
@@ -277,22 +277,12 @@ list badge.
 
 ---
 
-## Open Questions for Stakeholder Review
+## Decisions
 
-1. **Who can delete a thread entry?** Proposed: MANAGER+ only, since thread
-   history may be needed for warranty or billing disputes.
-
-2. **Should FYI threads count toward the pending badge?** Proposed: No —
-   only AWAITING_REPLY threads drive the badge count.
-
-3. **Mobile Phase 2 priority?** Technicians are primary mobile users — if
-   they are the main persona for this feature, Phase 2 may need to ship
-   simultaneously with Phase 1.
-
-4. **Character limit on notes?** Suggested 2,000 characters — enough to
-   paste a full short email but prevents abuse. Configurable per org.
-
-5. **Contact suggestions scope:** Should the contact autocomplete include
-   all org contacts (customers + vendors) or only those already linked to
-   this specific work order? Linked-only reduces noise for techs managing
-   many jobs.
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | Who can delete a thread entry? | MANAGER+ only |
+| 2 | Do FYI threads count toward the pending badge? | No — AWAITING_REPLY only |
+| 3 | Mobile priority? | Ship Phase 1 + 2 simultaneously |
+| 4 | Character limit on notes? | 2,000 characters |
+| 5 | Contact suggestions scope? | Linked-only (customer + vendors already on this WO) |
