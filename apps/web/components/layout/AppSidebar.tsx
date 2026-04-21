@@ -25,6 +25,7 @@ const navItems = [
   { href: '/parts',      label: 'Parts & POs',   icon: Package },
   { href: '/invoices',   label: 'Invoices',      icon: FileText },
   { href: '/compliance', label: 'Compliance',    icon: ShieldCheck },
+  { href: '/tools',      label: 'Tool Crib',     icon: Wrench },
   { href: '/analytics',  label: 'Analytics',     icon: BarChart3 },
 ];
 
