@@ -10,9 +10,9 @@ datasource db {
 // ─── Organization (multi-tenant root) ───────────────────────────────────────
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
   // Contact & identity
   faaRepairStationNumber String?
   phone                  String?
@@ -23,46 +23,57 @@ model Organization {
   defaultTaxRatePct      Float    @default(0.0)
   defaultBillingTerms    String   @default("NET_30")
   laborRoundingMinutes   Int      @default(15)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  laborRates       LaborRate[]
-  technicians      Technician[]
-  customers        Customer[]
-  workOrders       WorkOrder[]
-  invoices         Invoice[]
-  parts            Part[]
-  purchaseOrders   PurchaseOrder[]
-  users            User[]
-  userInvites      UserInvite[]
-  quotes           Quote[]
-  markupRules      MarkupRule[]
-  aogEvents        AOGEvent[]
-  fpaSnapshots     FPASnapshot[]
-  cashFlowSnapshots CashFlowSnapshot[]
-  communications   WorkOrderCommunication[]
+  // Feature flags for staged rollout
+  featureFaaDocs        Boolean @default(false)
+  featureToolCrib       Boolean @default(false)
+  featureTraceability   Boolean @default(false)
+  featureQualifications Boolean @default(false)
+
+  laborRates           LaborRate[]
+  technicians          Technician[]
+  customers            Customer[]
+  workOrders           WorkOrder[]
+  invoices             Invoice[]
+  parts                Part[]
+  purchaseOrders       PurchaseOrder[]
+  users                User[]
+  userInvites          UserInvite[]
+  quotes               Quote[]
+  markupRules          MarkupRule[]
+  aogEvents            AOGEvent[]
+  fpaSnapshots         FPASnapshot[]
+  cashFlowSnapshots    CashFlowSnapshot[]
+  communications       WorkOrderCommunication[]
+  generatedDocuments   GeneratedDocument[]
+  tools                Tool[]
+  certifications       Certification[]
+  taskCertRequirements TaskCertificationRequirement[]
 }
 
 // ─── Auth (NextAuth v5 / Auth.js) ────────────────────────────────────────────
 
 model User {
-  id                String       @id @default(cuid())
-  orgId             String
-  org               Organization @relation(fields: [orgId], references: [id])
-  email             String       @unique
-  name              String?
-  passwordHash      String?
-  role              UserRole     @default(TECHNICIAN)
-  passwordResetToken  String?    @unique
+  id                  String       @id @default(cuid())
+  orgId               String
+  org                 Organization @relation(fields: [orgId], references: [id])
+  email               String       @unique
+  name                String?
+  passwordHash        String?
+  role                UserRole     @default(TECHNICIAN)
+  passwordResetToken  String?      @unique
   passwordResetExpiry DateTime?
-  createdAt         DateTime     @default(now())
+  createdAt           DateTime     @default(now())
 
   accounts          Account[]
   sessions          Session[]
   technicianProfile Technician?
-  userInvites       UserInvite[] @relation("InvitedByUser")
+  userInvites       UserInvite[]             @relation("InvitedByUser")
   pushTokens        PushToken[]
   communications    WorkOrderCommunication[]
+  issuedDocuments   GeneratedDocument[]      @relation("IssuedByUser")
 }
 
 model PushToken {
@@ -70,7 +81,7 @@ model PushToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     String   @unique
-  platform  String   // 'ios' | 'android'
+  platform  String // 'ios' | 'android'
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -84,17 +95,17 @@ enum UserRole {
 }
 
 model UserInvite {
-  id           String   @id @default(cuid())
-  orgId        String
-  org          Organization @relation(fields: [orgId], references: [id])
-  email        String
-  role         UserRole @default(TECHNICIAN)
-  token        String   @unique @default(cuid())
-  invitedById  String?
-  invitedBy    User?    @relation("InvitedByUser", fields: [invitedById], references: [id])
-  expiresAt    DateTime
-  acceptedAt   DateTime?
-  createdAt    DateTime @default(now())
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id])
+  email       String
+  role        UserRole     @default(TECHNICIAN)
+  token       String       @unique @default(cuid())
+  invitedById String?
+  invitedBy   User?        @relation("InvitedByUser", fields: [invitedById], references: [id])
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime     @default(now())
 
   @@unique([orgId, email])
 }
@@ -157,19 +168,19 @@ enum BillingTerms {
 }
 
 model Aircraft {
-  id          String   @id @default(cuid())
-  nNumber     String   @unique
-  make        String
-  model       String
-  serial      String
-  year        Int?
-  ttsn        Float?
-  engineTtsn  Float?
-  propTtsn    Float?
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  nNumber    String   @unique
+  make       String
+  model      String
+  serial     String
+  year       Int?
+  ttsn       Float?
+  engineTtsn Float?
+  propTtsn   Float?
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   workOrders WorkOrder[]
   quotes     Quote[]
@@ -178,49 +189,51 @@ model Aircraft {
 // ─── Work Orders ─────────────────────────────────────────────────────────────
 
 model WorkOrder {
-  id             String          @id @default(cuid())
-  orgId          String
-  org            Organization    @relation(fields: [orgId], references: [id])
-  number         String          @unique
-  type           WorkOrderType   @default(SCHEDULED)
-  status         WorkOrderStatus @default(OPEN)
-  customerId     String
-  customer       Customer        @relation(fields: [customerId], references: [id])
-  aircraftId     String
-  aircraft       Aircraft        @relation(fields: [aircraftId], references: [id])
-  dateOpened     DateTime        @default(now())
-  estimatedClose DateTime?
-  closedAt       DateTime?
-  billingModel   BillingModel    @default(TIME_AND_MATERIALS)
-  nteAmount      Float?
-  laborRateId    String
-  laborRate      LaborRate       @relation(fields: [laborRateId], references: [id])
-  shopSuppliesPct Float          @default(0.035)
-  notes          String?
-  internalNotes  String?
-  estimatedTotal Float?
-  actualTotal    Float?
+  id               String          @id @default(cuid())
+  orgId            String
+  org              Organization    @relation(fields: [orgId], references: [id])
+  number           String          @unique
+  type             WorkOrderType   @default(SCHEDULED)
+  status           WorkOrderStatus @default(OPEN)
+  customerId       String
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  aircraftId       String
+  aircraft         Aircraft        @relation(fields: [aircraftId], references: [id])
+  dateOpened       DateTime        @default(now())
+  estimatedClose   DateTime?
+  closedAt         DateTime?
+  billingModel     BillingModel    @default(TIME_AND_MATERIALS)
+  nteAmount        Float?
+  laborRateId      String
+  laborRate        LaborRate       @relation(fields: [laborRateId], references: [id])
+  shopSuppliesPct  Float           @default(0.035)
+  notes            String?
+  internalNotes    String?
+  estimatedTotal   Float?
+  actualTotal      Float?
   // Quote linkage
-  quoteId        String?
-  quote          Quote?          @relation(fields: [quoteId], references: [id])
-  quotedAmount   Float?          // carried from approved Quote
-  depositCollected Float?        // deposit paid at quote acceptance
-  billingStage   String?         // e.g. "Stage3_Authorized", "Stage7_ReadyToInvoice"
+  quoteId          String?
+  quote            Quote?          @relation(fields: [quoteId], references: [id])
+  quotedAmount     Float? // carried from approved Quote
+  depositCollected Float? // deposit paid at quote acceptance
+  billingStage     String? // e.g. "Stage3_Authorized", "Stage7_ReadyToInvoice"
   // AOG linkage
-  aogEventId     String?         @unique
-  aogEvent       AOGEvent?       @relation(fields: [aogEventId], references: [id])
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  aogEventId       String?         @unique
+  aogEvent         AOGEvent?       @relation(fields: [aogEventId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
-  squawks         Squawk[]
-  lineItems       WorkOrderLineItem[]
-  partRequests    PartRequest[]
-  laborEntries    LaborEntry[]
-  purchaseOrders  PurchaseOrder[]
-  invoices        Invoice[]
-  milestones      BillingMilestone[]
-  complianceItems ComplianceItem[]
-  communications  WorkOrderCommunication[]
+  squawks            Squawk[]
+  lineItems          WorkOrderLineItem[]
+  partRequests       PartRequest[]
+  laborEntries       LaborEntry[]
+  purchaseOrders     PurchaseOrder[]
+  invoices           Invoice[]
+  milestones         BillingMilestone[]
+  complianceItems    ComplianceItem[]
+  communications     WorkOrderCommunication[]
+  generatedDocuments GeneratedDocument[]
+  toolCheckouts      ToolCheckout[]
 }
 
 enum WorkOrderType {
@@ -325,6 +338,7 @@ model Technician {
   orgId          String
   org            Organization @relation(fields: [orgId], references: [id])
   name           String
+  // @deprecated — migrate to TechnicianCertification; slated for removal next release.
   certifications String[]     @default([])
   costRate       Float
   billRate       Float
@@ -333,8 +347,11 @@ model Technician {
   user           User?        @relation(fields: [userId], references: [id])
   createdAt      DateTime     @default(now())
 
-  lineItems    WorkOrderLineItem[]
-  laborEntries LaborEntry[]
+  lineItems       WorkOrderLineItem[]
+  laborEntries    LaborEntry[]
+  toolsOwned      Tool[]                    @relation("OwnerTechnician")
+  toolCheckouts   ToolCheckout[]
+  technicianCerts TechnicianCertification[]
 }
 
 model LaborRate {
@@ -352,21 +369,21 @@ model LaborRate {
 }
 
 model LaborEntry {
-  id           String            @id @default(cuid())
+  id           String             @id @default(cuid())
   workOrderId  String
-  workOrder    WorkOrder         @relation(fields: [workOrderId], references: [id])
+  workOrder    WorkOrder          @relation(fields: [workOrderId], references: [id])
   lineItemId   String?
   lineItem     WorkOrderLineItem? @relation(fields: [lineItemId], references: [id])
   technicianId String
-  technician   Technician        @relation(fields: [technicianId], references: [id])
+  technician   Technician         @relation(fields: [technicianId], references: [id])
   date         DateTime
   hours        Float
   rateUsed     Float
-  billable     Boolean           @default(true)
+  billable     Boolean            @default(true)
   description  String?
   clockIn      DateTime?
   clockOut     DateTime?
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime           @default(now())
 }
 
 // ─── Parts & Procurement ─────────────────────────────────────────────────────
@@ -378,18 +395,21 @@ model Part {
   partNumber     String
   altPartNumbers String[]      @default([])
   description    String
-  category       String?       // e.g. "Avionics", "Engine", "Airframe"
+  category       String? // e.g. "Avionics", "Engine", "Airframe"
   condition      PartCondition @default(NEW)
   manufacturer   String?
+  // @deprecated — use PartLot.qtyOnHand (sum across lots). Kept during transition.
   qtyOnHand      Int           @default(0)
-  reorderPoint   Int?          // alert when qtyOnHand drops to or below this
-  reorderQty     Int?          // suggested order quantity
+  reorderPoint   Int? // alert when qtyOnHand drops to or below this
+  reorderQty     Int? // suggested order quantity
   unitCost       Float
   markupPct      Float
-  bin            String?       // shelf/bin location e.g. "A-12-3"
+  bin            String? // shelf/bin location e.g. "A-12-3"
   notes          String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  lots PartLot[]
 
   @@unique([orgId, partNumber, condition])
 }
@@ -402,28 +422,31 @@ enum PartCondition {
 }
 
 model PartRequest {
-  id              String            @id @default(cuid())
+  id              String             @id @default(cuid())
   workOrderId     String
-  workOrder       WorkOrder         @relation(fields: [workOrderId], references: [id])
+  workOrder       WorkOrder          @relation(fields: [workOrderId], references: [id])
   lineItemId      String?
   lineItem        WorkOrderLineItem? @relation(fields: [lineItemId], references: [id])
   partNumber      String
   description     String
-  qty             Int               @default(1)
-  condition       PartCondition     @default(NEW)
+  qty             Int                @default(1)
+  condition       PartCondition      @default(NEW)
   unitCost        Float?
   markupPct       Float?
   unitBillPrice   Float?
-  requires8130    Boolean           @default(false)
-  has8130         Boolean           @default(false)
-  status          PartRequestStatus @default(REQUESTED)
+  requires8130    Boolean            @default(false)
+  has8130         Boolean            @default(false)
+  status          PartRequestStatus  @default(REQUESTED)
   purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  partLotId       String?
+  partLot         PartLot?           @relation(fields: [partLotId], references: [id])
   receivedAt      DateTime?
-  createdAt       DateTime          @default(now())
+  createdAt       DateTime           @default(now())
 
-  warrantyRecord  WarrantyRecord?
-  coreReturn      CoreReturn?
+  warrantyRecord     WarrantyRecord?
+  coreReturn         CoreReturn?
+  generatedDocuments GeneratedDocument[]
 }
 
 enum PartRequestStatus {
@@ -478,42 +501,44 @@ model POLineItem {
   requires8130    Boolean       @default(false)
   receivedQty     Int           @default(0)
   receivedAt      DateTime?
+
+  partLots PartLot[]
 }
 
 // ─── Invoicing & Payments ─────────────────────────────────────────────────────
 
 model Invoice {
-  id            String        @id @default(cuid())
-  orgId         String
-  org           Organization  @relation(fields: [orgId], references: [id])
-  invoiceNumber String        @unique
-  customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id])
-  workOrderId   String?
-  workOrder     WorkOrder?    @relation(fields: [workOrderId], references: [id])
-  milestoneId   String?
-  status        InvoiceStatus @default(DRAFT)
-  issueDate     DateTime      @default(now())
-  dueDate       DateTime
-  sentAt        DateTime?
-  viewedAt      DateTime?
-  paidAt        DateTime?
-  subtotal      Float
-  taxRate       Float         @default(0)
-  taxAmount     Float         @default(0)
-  total         Float
-  amountPaid    Float         @default(0)
-  balance       Float
-  isTrial       Boolean       @default(false)
-  notes         String?
-  internalNotes String?
+  id                    String        @id @default(cuid())
+  orgId                 String
+  org                   Organization  @relation(fields: [orgId], references: [id])
+  invoiceNumber         String        @unique
+  customerId            String
+  customer              Customer      @relation(fields: [customerId], references: [id])
+  workOrderId           String?
+  workOrder             WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  milestoneId           String?
+  status                InvoiceStatus @default(DRAFT)
+  issueDate             DateTime      @default(now())
+  dueDate               DateTime
+  sentAt                DateTime?
+  viewedAt              DateTime?
+  paidAt                DateTime?
+  subtotal              Float
+  taxRate               Float         @default(0)
+  taxAmount             Float         @default(0)
+  total                 Float
+  amountPaid            Float         @default(0)
+  balance               Float
+  isTrial               Boolean       @default(false)
+  notes                 String?
+  internalNotes         String?
   // Customer payment portal
-  portalToken            String?   @unique
-  stripePaymentIntentId  String?
-  stripeCheckoutUrl      String?
-  stripeCheckoutExpiry   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  portalToken           String?       @unique
+  stripePaymentIntentId String?
+  stripeCheckoutUrl     String?
+  stripeCheckoutExpiry  DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   lineItems InvoiceLineItem[]
   payments  Payment[]
@@ -605,6 +630,8 @@ model ComplianceItem {
   notes           String?
   documentUrls    String[]       @default([])
   createdAt       DateTime       @default(now())
+
+  generatedDocuments GeneratedDocument[]
 }
 
 enum ComplianceType {
@@ -622,22 +649,22 @@ enum ComplianceType {
 // ─── Work Order Communications ───────────────────────────────────────────────
 
 model WorkOrderCommunication {
-  id           String         @id @default(cuid())
+  id           String        @id @default(cuid())
   orgId        String
-  org          Organization   @relation(fields: [orgId], references: [id])
+  org          Organization  @relation(fields: [orgId], references: [id])
   workOrderId  String
-  workOrder    WorkOrder      @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrder    WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   subject      String
   direction    CommDirection
   status       CommStatus
   contactName  String?
   contactEmail String?
-  notes        String?        // max 2,000 chars enforced at API layer
-  occurredAt   DateTime       @default(now())
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  notes        String? // max 2,000 chars enforced at API layer
+  occurredAt   DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   createdById  String?
-  createdBy    User?          @relation(fields: [createdById], references: [id])
+  createdBy    User?         @relation(fields: [createdById], references: [id])
 
   @@index([workOrderId, status])
   @@index([orgId, status])
@@ -658,35 +685,35 @@ enum CommStatus {
 // ─── Quotes / Estimates ───────────────────────────────────────────────────────
 
 model Quote {
-  id           String      @id @default(cuid())
-  orgId        String
-  org          Organization @relation(fields: [orgId], references: [id])
-  quoteNumber  String      @unique  // QT-2025-0001
-  status       QuoteStatus @default(DRAFT)
-  customerId   String
-  customer     Customer    @relation(fields: [customerId], references: [id])
-  aircraftId   String?
-  aircraft     Aircraft?   @relation(fields: [aircraftId], references: [id])
-  billingModel BillingModel @default(TIME_AND_MATERIALS)
-  nteAmount    Float?
-  laborRateId  String?
-  laborRate    LaborRate?  @relation(fields: [laborRateId], references: [id])
-  subtotal     Float       @default(0)
-  total        Float       @default(0)
-  depositPct   Float       @default(0)       // e.g. 0.25 = 25% deposit required
-  depositAmount Float      @default(0)
-  validDays    Int         @default(30)
-  expiresAt    DateTime?
-  sentAt       DateTime?
-  approvedAt   DateTime?
-  approvedBy   String?     // customer name who approved
-  declinedAt   DateTime?
+  id            String       @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id])
+  quoteNumber   String       @unique // QT-2025-0001
+  status        QuoteStatus  @default(DRAFT)
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  aircraftId    String?
+  aircraft      Aircraft?    @relation(fields: [aircraftId], references: [id])
+  billingModel  BillingModel @default(TIME_AND_MATERIALS)
+  nteAmount     Float?
+  laborRateId   String?
+  laborRate     LaborRate?   @relation(fields: [laborRateId], references: [id])
+  subtotal      Float        @default(0)
+  total         Float        @default(0)
+  depositPct    Float        @default(0) // e.g. 0.25 = 25% deposit required
+  depositAmount Float        @default(0)
+  validDays     Int          @default(30)
+  expiresAt     DateTime?
+  sentAt        DateTime?
+  approvedAt    DateTime?
+  approvedBy    String? // customer name who approved
+  declinedAt    DateTime?
   declineReason String?
-  notes        String?
+  notes         String?
   internalNotes String?
-  portalToken  String?   @unique
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  portalToken   String?      @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   lines      QuoteLine[]
   workOrders WorkOrder[]
@@ -699,20 +726,20 @@ enum QuoteStatus {
   APPROVED
   DECLINED
   EXPIRED
-  CONVERTED  // converted to a WorkOrder
+  CONVERTED // converted to a WorkOrder
 }
 
 model QuoteLine {
-  id          String           @id @default(cuid())
+  id          String            @id @default(cuid())
   quoteId     String
-  quote       Quote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quote       Quote             @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   category    QuoteLineCategory
   description String
-  qty         Float            @default(1)
+  qty         Float             @default(1)
   unitPrice   Float
   total       Float
-  sortOrder   Int              @default(0)
-  createdAt   DateTime         @default(now())
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
 }
 
 enum QuoteLineCategory {
@@ -730,10 +757,10 @@ model MarkupRule {
   id        String       @id @default(cuid())
   orgId     String
   org       Organization @relation(fields: [orgId], references: [id])
-  label     String       // "< $25", "$25–$500", etc.
-  minCost   Float        // inclusive lower bound (0 for first tier)
-  maxCost   Float?       // null = no upper bound (last tier)
-  markupPct Float        // e.g. 1.0 = 100%, 0.75 = 75%
+  label     String // "< $25", "$25–$500", etc.
+  minCost   Float // inclusive lower bound (0 for first tier)
+  maxCost   Float? // null = no upper bound (last tier)
+  markupPct Float // e.g. 1.0 = 100%, 0.75 = 75%
   sortOrder Int          @default(0)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -744,32 +771,32 @@ model MarkupRule {
 // ─── AOG Events ──────────────────────────────────────────────────────────────
 
 model AOGEvent {
-  id            String    @id @default(cuid())
-  orgId         String
-  org           Organization @relation(fields: [orgId], references: [id])
-  activatedAt   DateTime  @default(now())
-  location      String?   // airport ICAO or address
-  calloutFee    Float     @default(0)
-  mileage       Float     @default(0)
-  mileageRate   Float     @default(1.25)
-  driveHours    Float     @default(0)
-  driveRate     Float     @default(70.0)   // per tech per hour
-  techCount     Int       @default(1)
-  minimumHours  Float     @default(2.0)    // 2hr minimum callout
-  resolvedAt    DateTime?
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  activatedAt  DateTime     @default(now())
+  location     String? // airport ICAO or address
+  calloutFee   Float        @default(0)
+  mileage      Float        @default(0)
+  mileageRate  Float        @default(1.25)
+  driveHours   Float        @default(0)
+  driveRate    Float        @default(70.0) // per tech per hour
+  techCount    Int          @default(1)
+  minimumHours Float        @default(2.0) // 2hr minimum callout
+  resolvedAt   DateTime?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  workOrder WorkOrder?    // inverse of WorkOrder.aogEvent
+  workOrder WorkOrder? // inverse of WorkOrder.aogEvent
 }
 
 // ─── Warranty & Core Returns ──────────────────────────────────────────────────
 
 model WarrantyRecord {
-  id             String        @id @default(cuid())
-  partRequestId  String        @unique
-  partRequest    PartRequest   @relation(fields: [partRequestId], references: [id])
+  id             String              @id @default(cuid())
+  partRequestId  String              @unique
+  partRequest    PartRequest         @relation(fields: [partRequestId], references: [id])
   vendor         String
   warrantyMonths Int
   installDate    DateTime?
@@ -779,8 +806,8 @@ model WarrantyRecord {
   claimDate      DateTime?
   claimAmount    Float?
   notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 }
 
 enum WarrantyClaimStatus {
@@ -797,7 +824,7 @@ model CoreReturn {
   partRequest     PartRequest @relation(fields: [partRequestId], references: [id])
   corePartNumber  String
   coreDescription String?
-  coreValue       Float       // expected credit
+  coreValue       Float // expected credit
   vendor          String
   returnDueDate   DateTime?
   returnedAt      DateTime?
@@ -812,53 +839,53 @@ model CoreReturn {
 // ─── FP&A Snapshots ───────────────────────────────────────────────────────────
 
 model FPASnapshot {
-  id              String   @id @default(cuid())
-  orgId           String
-  org             Organization @relation(fields: [orgId], references: [id])
-  month           String   // "2025-01" format
-  revenue         Float    @default(0)
-  laborBilled     Float    @default(0)
-  laborCost       Float    @default(0)
-  partsBilled     Float    @default(0)
-  partsCost       Float    @default(0)
-  grossProfit     Float    @default(0)
-  grossMarginPct  Float    @default(0)
-  billableHours   Float    @default(0)
-  totalHours      Float    @default(0)
-  utilizationPct  Float    @default(0)
-  avgDaysToInvoice Float   @default(0)
-  aogCount        Int      @default(0)
-  woCount         Int      @default(0)
-  createdAt       DateTime @default(now())
+  id               String       @id @default(cuid())
+  orgId            String
+  org              Organization @relation(fields: [orgId], references: [id])
+  month            String // "2025-01" format
+  revenue          Float        @default(0)
+  laborBilled      Float        @default(0)
+  laborCost        Float        @default(0)
+  partsBilled      Float        @default(0)
+  partsCost        Float        @default(0)
+  grossProfit      Float        @default(0)
+  grossMarginPct   Float        @default(0)
+  billableHours    Float        @default(0)
+  totalHours       Float        @default(0)
+  utilizationPct   Float        @default(0)
+  avgDaysToInvoice Float        @default(0)
+  aogCount         Int          @default(0)
+  woCount          Int          @default(0)
+  createdAt        DateTime     @default(now())
 
   @@unique([orgId, month])
 }
 
 model CashFlowSnapshot {
-  id              String   @id @default(cuid())
-  orgId           String
-  org             Organization @relation(fields: [orgId], references: [id])
-  snapshotDate    DateTime @default(now())
+  id                 String       @id @default(cuid())
+  orgId              String
+  org                Organization @relation(fields: [orgId], references: [id])
+  snapshotDate       DateTime     @default(now())
   // AR by aging bucket
-  arCurrent       Float    @default(0)
-  ar1to30         Float    @default(0)
-  ar31to60        Float    @default(0)
-  ar61to90        Float    @default(0)
-  ar90plus        Float    @default(0)
+  arCurrent          Float        @default(0)
+  ar1to30            Float        @default(0)
+  ar31to60           Float        @default(0)
+  ar61to90           Float        @default(0)
+  ar90plus           Float        @default(0)
   // Expected collections
-  arExpected30d   Float    @default(0)
-  arExpected60d   Float    @default(0)
-  arExpected90d   Float    @default(0)
+  arExpected30d      Float        @default(0)
+  arExpected60d      Float        @default(0)
+  arExpected90d      Float        @default(0)
   // WIP projection
-  wipValue        Float    @default(0)
-  wipProjected30d Float    @default(0)
+  wipValue           Float        @default(0)
+  wipProjected30d    Float        @default(0)
   // Obligations
-  partsOnOrder    Float    @default(0)  // open PO values
+  partsOnOrder       Float        @default(0) // open PO values
   // Net forecast
-  forecastBalance30d Float @default(0)
-  forecastBalance60d Float @default(0)
-  forecastBalance90d Float @default(0)
-  createdAt       DateTime @default(now())
+  forecastBalance30d Float        @default(0)
+  forecastBalance60d Float        @default(0)
+  forecastBalance90d Float        @default(0)
+  createdAt          DateTime     @default(now())
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
@@ -866,15 +893,238 @@ model CashFlowSnapshot {
 model AuditLog {
   id         String   @id @default(cuid())
   orgId      String
-  entityType String   // "WorkOrder" | "Invoice" | "LaborEntry" | "Squawk"
+  entityType String // "WorkOrder" | "Invoice" | "LaborEntry" | "Squawk" | "GeneratedDocument" | "Tool" | "TechnicianCertification"
   entityId   String
-  action     String   // "STATUS_CHANGED" | "LABOR_LOGGED" | "SQUAWK_APPROVED" | "NOTE_UPDATED"
+  action     String // "STATUS_CHANGED" | "LABOR_LOGGED" | "SQUAWK_APPROVED" | "NOTE_UPDATED" | "DOCUMENT_ISSUED" | "DOCUMENT_VOIDED" | "TOOL_CHECKED_OUT" | "CERT_EXPIRED"
   actorName  String?
   before     Json?
   after      Json?
-  meta       Json?    // additional context (e.g. hours logged, rate used)
+  meta       Json? // additional context (e.g. hours logged, rate used)
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
   @@index([orgId, createdAt])
+}
+
+// ─── P0-1 FAA Document Generation ─────────────────────────────────────────────
+
+model GeneratedDocument {
+  id                String          @id @default(cuid())
+  orgId             String
+  org               Organization    @relation(fields: [orgId], references: [id])
+  type              DocumentType
+  workOrderId       String?
+  workOrder         WorkOrder?      @relation(fields: [workOrderId], references: [id])
+  complianceItemId  String?
+  complianceItem    ComplianceItem? @relation(fields: [complianceItemId], references: [id])
+  partRequestId     String?
+  partRequest       PartRequest?    @relation(fields: [partRequestId], references: [id])
+  documentNumber    String // org-scoped human-readable identifier
+  status            DocumentStatus  @default(DRAFT)
+  pdfUrl            String? // Vercel Blob URL of rendered PDF
+  // Immutable snapshot of input data at issue time. PDFs remain reproducible
+  // even if source records (WorkOrder, ComplianceItem, etc.) change later.
+  payloadJson       Json
+  issuedAt          DateTime?
+  issuedByUserId    String?
+  issuedBy          User?           @relation("IssuedByUser", fields: [issuedByUserId], references: [id])
+  signatureImageUrl String? // Vercel Blob URL of inspector e-signature
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([orgId, documentNumber])
+  @@index([workOrderId])
+  @@index([complianceItemId])
+  @@index([partRequestId])
+  @@index([orgId, type, status])
+}
+
+enum DocumentType {
+  FORM_337 // FAA Form 337 — Major Repair & Alteration
+  CERT_8130_3 // FAA Form 8130-3 — Authorized Release Certificate
+  MAINT_RELEASE // Maintenance release / return-to-service statement
+  LOGBOOK_ENTRY // Aircraft or component logbook sticker
+  PARTS_TAG // Serviceable / Unserviceable / Repairable parts tag
+}
+
+enum DocumentStatus {
+  DRAFT
+  ISSUED
+  VOID
+}
+
+// ─── P0-2 Parts Traceability ──────────────────────────────────────────────────
+
+// A physical lot / receipt of a Part. Part is the catalog row; PartLot holds
+// inventory units with serial / lot / batch / expiration traceability, which is
+// the prerequisite for 8130-3 and 337 lineage.
+model PartLot {
+  id               String        @id @default(cuid())
+  partId           String
+  part             Part          @relation(fields: [partId], references: [id])
+  serialNumber     String?
+  lotNumber        String?
+  batchNumber      String?
+  mfgDate          DateTime?
+  expirationDate   DateTime?
+  revision         String?
+  qtyOnHand        Int           @default(0)
+  condition        PartCondition @default(NEW)
+  receivedPoLineId String?
+  receivedPoLine   POLineItem?   @relation(fields: [receivedPoLineId], references: [id])
+  cocDocUrl        String? // Certificate of Conformance (Vercel Blob)
+  form8130Url      String? // 8130-3 accompanying the lot
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  partRequests PartRequest[]
+
+  @@unique([partId, serialNumber])
+  @@index([partId, condition])
+  @@index([expirationDate])
+}
+
+// ─── P0-3 Tool Crib ───────────────────────────────────────────────────────────
+
+model Tool {
+  id                        String        @id @default(cuid())
+  orgId                     String
+  org                       Organization  @relation(fields: [orgId], references: [id])
+  assetTag                  String // org-scoped; see @@unique below
+  name                      String
+  manufacturer              String?
+  modelNumber               String?
+  serialNumber              String?
+  ownership                 ToolOwnership @default(COMPANY)
+  ownerTechnicianId         String?
+  ownerTechnician           Technician?   @relation("OwnerTechnician", fields: [ownerTechnicianId], references: [id])
+  calibrationRequired       Boolean       @default(false)
+  calibrationIntervalMonths Int?
+  lastCalibratedAt          DateTime?
+  nextCalibrationDue        DateTime?
+  calibrationCertUrl        String?
+  status                    ToolStatus    @default(AVAILABLE)
+  bin                       String?
+  notes                     String?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+
+  checkouts         ToolCheckout[]
+  calibrationEvents ToolCalibrationEvent[]
+
+  @@unique([orgId, assetTag])
+  @@index([orgId, status])
+  @@index([nextCalibrationDue])
+}
+
+enum ToolOwnership {
+  COMPANY
+  EMPLOYEE
+}
+
+enum ToolStatus {
+  AVAILABLE
+  CHECKED_OUT
+  CALIBRATION_DUE
+  OUT_OF_SERVICE
+  LOST
+}
+
+model ToolCheckout {
+  id            String     @id @default(cuid())
+  toolId        String
+  tool          Tool       @relation(fields: [toolId], references: [id])
+  technicianId  String
+  technician    Technician @relation(fields: [technicianId], references: [id])
+  workOrderId   String?
+  workOrder     WorkOrder? @relation(fields: [workOrderId], references: [id])
+  checkedOutAt  DateTime   @default(now())
+  dueBackAt     DateTime?
+  returnedAt    DateTime?
+  conditionNote String?
+  createdAt     DateTime   @default(now())
+
+  @@index([toolId, returnedAt])
+  @@index([technicianId, returnedAt])
+}
+
+model ToolCalibrationEvent {
+  id          String   @id @default(cuid())
+  toolId      String
+  tool        Tool     @relation(fields: [toolId], references: [id])
+  performedAt DateTime
+  performedBy String
+  vendor      String?
+  certUrl     String?
+  nextDueAt   DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([toolId, performedAt])
+}
+
+// ─── P0-4 Training & Qualifications ───────────────────────────────────────────
+
+model Certification {
+  id                    String       @id @default(cuid())
+  orgId                 String
+  org                   Organization @relation(fields: [orgId], references: [id])
+  code                  String // "A&P", "IA", "AV_REPAIRMAN", etc.
+  name                  String
+  issuingAuthority      String? // "FAA", "EASA", vendor name, etc.
+  requiresRenewal       Boolean      @default(false)
+  renewalIntervalMonths Int?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  technicianCerts  TechnicianCertification[]
+  taskRequirements TaskCertificationRequirement[]
+
+  @@unique([orgId, code])
+}
+
+model TechnicianCertification {
+  id              String        @id @default(cuid())
+  technicianId    String
+  technician      Technician    @relation(fields: [technicianId], references: [id])
+  certificationId String
+  certification   Certification @relation(fields: [certificationId], references: [id])
+  issuedAt        DateTime
+  expiresAt       DateTime?
+  certificateUrl  String? // Vercel Blob — scanned/uploaded cert
+  status          CertStatus    @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([technicianId, certificationId])
+  @@index([expiresAt])
+  @@index([status])
+}
+
+enum CertStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// Maps required certifications to task patterns or WO types. Evaluated by
+// `canTechnicianWorkLineItem` to gate WorkOrderLineItem.technicianId assignment.
+model TaskCertificationRequirement {
+  id              String         @id @default(cuid())
+  orgId           String
+  org             Organization   @relation(fields: [orgId], references: [id])
+  // Match by either a task pattern OR a WorkOrderType — at least one required.
+  taskPattern     String? // simple glob or substring match on WorkOrderLineItem.taskNumber / description
+  workOrderType   WorkOrderType?
+  certificationId String
+  certification   Certification  @relation(fields: [certificationId], references: [id])
+  required        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([orgId, workOrderType])
+  @@index([orgId, taskPattern])
 }
