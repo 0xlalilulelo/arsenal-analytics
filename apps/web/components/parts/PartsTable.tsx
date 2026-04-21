@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -115,7 +116,12 @@ export function PartsTable({
             return (
               <tr key={part.id} className={`hover:bg-surface-hover/30 ${isLow ? 'bg-intent-warning/5' : ''}`}>
                 <td className="py-3 px-4">
-                  <p className="font-mono text-xs font-semibold text-content-primary">{part.partNumber}</p>
+                  <Link
+                    href={`/parts/${part.id}`}
+                    className="font-mono text-xs font-semibold text-content-primary hover:text-intent-primary hover:underline"
+                  >
+                    {part.partNumber}
+                  </Link>
                   {(part.altPartNumbers ?? []).length > 0 && (
                     <p className="font-mono text-xs text-content-muted">Alt: {part.altPartNumbers![0]}</p>
                   )}

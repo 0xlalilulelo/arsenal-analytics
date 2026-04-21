@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { CommsTab } from '@/components/work-orders/CommsTab';
 import { DocumentsTab } from '@/components/work-orders/DocumentsTab';
+import { InstallLotPicker, type InstallLotPickerPart } from '@/components/work-orders/InstallLotPicker';
 import { useWorkOrderComms } from '@/hooks/useWorkOrderCommunications';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
@@ -56,6 +57,7 @@ export default function WorkOrderDetailPage() {
   const [editLaborEntry, setEditLaborEntry] = useState<{ id: string; hours: number; description: string | null; billable: boolean; date: string } | null>(null);
   const [deleteLaborId, setDeleteLaborId] = useState<string | null>(null);
   const [deleteLineItemId, setDeleteLineItemId] = useState<string | null>(null);
+  const [installPart, setInstallPart] = useState<InstallLotPickerPart | null>(null);
 
   // Warranty dialog state
   const [warrantyPartId, setWarrantyPartId] = useState<string | null>(null);
@@ -737,7 +739,18 @@ export default function WorkOrderDetailPage() {
                                   </Button>
                                 )}
                                 {pr.status === 'RECEIVED' && (
-                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-intent-primary hover:text-intent-primary" onClick={() => updatePartStatus({ partRequestId: pr.id, status: 'INSTALLED' })}>
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-7 text-xs gap-1 text-intent-primary hover:text-intent-primary"
+                                    onClick={() => setInstallPart({
+                                      id: pr.id,
+                                      partNumber: pr.partNumber,
+                                      description: pr.description,
+                                      qty: pr.qty,
+                                      condition: pr.condition,
+                                      requires8130: pr.requires8130,
+                                    })}
+                                  >
                                     <Hammer className="h-3 w-3" />Install
                                   </Button>
                                 )}
@@ -1149,6 +1162,13 @@ export default function WorkOrderDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Install Lot Picker */}
+      <InstallLotPicker
+        workOrderId={workOrderId}
+        partRequest={installPart}
+        onClose={() => setInstallPart(null)}
+      />
 
       {/* Warranty Dialog */}
       <Dialog open={!!warrantyPartId} onOpenChange={(v) => !v && setWarrantyPartId(null)}>

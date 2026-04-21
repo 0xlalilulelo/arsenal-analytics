@@ -38,7 +38,7 @@ export type WorkOrderDetail = {
   laborEntries: Array<{ id: string; date: string; hours: number; rateUsed: number; billable: boolean; description: string | null; technician: { name: string } }>;
   squawks: Array<{ id: string; description: string; isAirworthiness: boolean; status: 'PENDING_APPROVAL' | 'APPROVED' | 'DECLINED' | 'DEFERRED'; estLaborHours: number | null; estPartsTotal: number | null; estTotal: number | null; approvedBy: string | null; approvedAt: string | null; photoUrls: string[] }>;
   complianceItems: Array<{ id: string; type: string; referenceId: string; description: string; completedAt: string | null; form337Required: boolean }>;
-  partRequests: Array<{ id: string; partNumber: string; description: string; qty: number; status: string; unitCost: number | null; unitBillPrice: number | null; requires8130: boolean; has8130: boolean }>;
+  partRequests: Array<{ id: string; partNumber: string; description: string; qty: number; condition: string; status: string; unitCost: number | null; unitBillPrice: number | null; requires8130: boolean; has8130: boolean; partLotId: string | null }>;
   milestones: Array<{ id: string; title: string; pct: number; amount: number | null; invoiced: boolean; sortOrder: number }>;
   invoices: Array<{ id: string; invoiceNumber: string; total: number; status: string }>;
 };

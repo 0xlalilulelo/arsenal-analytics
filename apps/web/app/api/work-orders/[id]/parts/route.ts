@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@mro/db';
-import { getMarkupPct, getBillPrice, type MarkupTier } from '@mro/core';
+import {
+  getMarkupPct,
+  getBillPrice,
+  requiresLotTraceability,
+  validateExpirationBeforeInstall,
+  type MarkupTier,
+} from '@mro/core';
 import type { PartCondition, PartRequestStatus } from '@prisma/client';
 
 async function loadOrgMarkupRules(orgId: string): Promise<MarkupTier[]> {
@@ -93,7 +99,23 @@ export async function PATCH(
   try {
     const { id: workOrderId } = await params;
     const body = await request.json();
-    const { partRequestId, status, unitCost, markupPctOverride, receivedAt, purchaseOrderId } = body;
+    const {
+      partRequestId,
+      status,
+      unitCost,
+      markupPctOverride,
+      receivedAt,
+      purchaseOrderId,
+      partLotId,
+    } = body as {
+      partRequestId: string;
+      status?: PartRequestStatus;
+      unitCost?: number;
+      markupPctOverride?: number;
+      receivedAt?: string;
+      purchaseOrderId?: string | null;
+      partLotId?: string | null;
+    };
 
     if (!partRequestId) return NextResponse.json({ error: 'partRequestId required' }, { status: 422 });
 
@@ -104,6 +126,48 @@ export async function PATCH(
 
     const wo = await prisma.workOrder.findUnique({ where: { id: workOrderId }, select: { orgId: true } });
 
+    // Resolve the lot id that will be bound on this update (either new or previously attached).
+    const resolvedPartLotId = partLotId !== undefined ? partLotId : existing.partLotId;
+
+    // Gate INSTALLED transitions on traceability and lot validity.
+    if (status === 'INSTALLED' && existing.status !== 'INSTALLED') {
+      if (requiresLotTraceability(existing) && !resolvedPartLotId) {
+        return NextResponse.json(
+          { error: 'A traceable PartLot is required before installing a part that requires an 8130-3.' },
+          { status: 422 },
+        );
+      }
+
+      if (resolvedPartLotId) {
+        const lot = await prisma.partLot.findUnique({
+          where: { id: resolvedPartLotId },
+          include: { part: { select: { orgId: true } } },
+        });
+        if (!lot || (wo && lot.part.orgId !== wo.orgId)) {
+          return NextResponse.json({ error: 'Part lot not found' }, { status: 404 });
+        }
+        if (lot.condition !== existing.condition) {
+          return NextResponse.json(
+            { error: `Lot condition (${lot.condition}) does not match request condition (${existing.condition}).` },
+            { status: 422 },
+          );
+        }
+        if (lot.qtyOnHand < existing.qty) {
+          return NextResponse.json(
+            { error: `Lot has ${lot.qtyOnHand} on hand; request needs ${existing.qty}.` },
+            { status: 422 },
+          );
+        }
+        const verdict = validateExpirationBeforeInstall(lot);
+        if (verdict.status === 'block') {
+          return NextResponse.json(
+            { error: verdict.reason === 'EXPIRED' ? 'Lot is expired' : 'Lot has no quantity on hand' },
+            { status: 422 },
+          );
+        }
+      }
+    }
+
     // Recalculate markup if cost updated
     let markupPct = existing.markupPct;
     let unitBillPrice = existing.unitBillPrice;
@@ -113,14 +177,27 @@ export async function PATCH(
       unitBillPrice = getBillPrice(unitCost, markupPct ?? undefined, orgRules);
     }
 
-    const updated = await prisma.partRequest.update({
-      where: { id: partRequestId },
-      data: {
-        ...(status ? { status } : {}),
-        ...(unitCost != null ? { unitCost, markupPct, unitBillPrice } : {}),
-        ...(receivedAt ? { receivedAt: new Date(receivedAt) } : {}),
-        ...(purchaseOrderId !== undefined ? { purchaseOrderId } : {}),
-      },
+    const updated = await prisma.$transaction(async tx => {
+      const next = await tx.partRequest.update({
+        where: { id: partRequestId },
+        data: {
+          ...(status ? { status } : {}),
+          ...(unitCost != null ? { unitCost, markupPct, unitBillPrice } : {}),
+          ...(receivedAt ? { receivedAt: new Date(receivedAt) } : {}),
+          ...(purchaseOrderId !== undefined ? { purchaseOrderId } : {}),
+          ...(partLotId !== undefined ? { partLotId } : {}),
+        },
+      });
+
+      // Decrement lot qty on the INSTALLED transition (one-shot; skips re-installs).
+      if (status === 'INSTALLED' && existing.status !== 'INSTALLED' && resolvedPartLotId) {
+        await tx.partLot.update({
+          where: { id: resolvedPartLotId },
+          data: { qtyOnHand: { decrement: existing.qty } },
+        });
+      }
+
+      return next;
     });
 
     return NextResponse.json({ data: updated });

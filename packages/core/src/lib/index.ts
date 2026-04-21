@@ -6,3 +6,4 @@ export * from './job-profitability';
 export * from './work-order-stages';
 export * from './cash-flow-forecast';
 export * from './faa-documents';
+export * from './traceability';
