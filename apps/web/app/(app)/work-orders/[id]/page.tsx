@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { SquawkPanel } from '@/components/work-orders/SquawkPanel';
 import { CommsTab } from '@/components/work-orders/CommsTab';
+import { DocumentsTab } from '@/components/work-orders/DocumentsTab';
 import { useWorkOrderComms } from '@/hooks/useWorkOrderCommunications';
 import { formatCurrency, formatDate, formatPct } from '@/lib/utils';
 import { useWorkOrderDetail } from '@/hooks/useWorkOrders';
@@ -26,7 +27,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
-  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw, Mail,
+  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw, Mail, ScrollText,
 } from 'lucide-react';
 
 const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
@@ -478,6 +479,7 @@ export default function WorkOrderDetailPage() {
               <TabsTrigger value="parts" className="gap-1.5"><Package className="h-3.5 w-3.5" />Parts</TabsTrigger>
               <TabsTrigger value="billing" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Billing</TabsTrigger>
               <TabsTrigger value="compliance" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Compliance</TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5"><ScrollText className="h-3.5 w-3.5" />Documents</TabsTrigger>
               <TabsTrigger value="comms" className="gap-1.5">
                 <Mail className="h-3.5 w-3.5" />Comms
                 {pendingCommsCount > 0 && (
@@ -900,6 +902,15 @@ export default function WorkOrderDetailPage() {
                   </div>
                 ))}
               </div>
+            </TabsContent>
+
+            {/* ── Documents ─────────────────────────────────────────────────── */}
+            <TabsContent value="documents">
+              <DocumentsTab
+                workOrderId={wo.id}
+                complianceItems={wo.complianceItems}
+                partRequests={wo.partRequests}
+              />
             </TabsContent>
 
             {/* ── Comms ─────────────────────────────────────────────────────── */}
