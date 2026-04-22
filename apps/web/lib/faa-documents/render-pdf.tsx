@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Document, Page, View, Text, StyleSheet, renderToBuffer,
+  Document, Page, View, Text, Image, StyleSheet, renderToBuffer,
   type DocumentProps,
 } from '@react-pdf/renderer';
 import type {
@@ -88,6 +88,19 @@ function Field({ label, value, flex }: { label: string; value?: string | number 
 
 function SectionTitle({ children }: { children: string }) {
   return <Text style={base.sectionTitle}>{children}</Text>;
+}
+
+function SigField({ label, signatureImageUrl }: { label: string; signatureImageUrl?: string | null }) {
+  return (
+    <View style={base.sigField}>
+      {signatureImageUrl ? (
+        <Image src={signatureImageUrl} style={{ height: 28, objectFit: 'contain', objectPositionX: '0%', marginBottom: 2 }} />
+      ) : (
+        <View style={base.sigLine}><Text style={{ color: '#fff' }}>_</Text></View>
+      )}
+      <Text style={base.sigLabel}>{label}</Text>
+    </View>
+  );
 }
 
 // ─── Form 337 ─────────────────────────────────────────────────────────────────
@@ -185,10 +198,7 @@ function Form337Doc({ p }: { p: Form337Payload }) {
             I certify that the repair and/or alteration described in this document complies with the applicable regulations of the Federal Aviation Regulations and that the work was done in accordance with the standards of 14 CFR Part 43.
           </Text>
           <View style={base.signatureBlock}>
-            <View style={base.sigField}>
-              <View style={base.sigLine}><Text style={{ color: '#fff' }}>_</Text></View>
-              <Text style={base.sigLabel}>Signature of Authorized Inspector / IA</Text>
-            </View>
+            <SigField label="Signature of Authorized Inspector / IA" signatureImageUrl={p.signatureImageUrl} />
             <Field label="A&P / IA Certificate No." value={p.mechanicCertNumber} flex={1} />
             <Field label="Name (Print)" value={p.certifyingTechnician} flex={1} />
             <Field label="Date" value={fmt(p.issuedAt)} flex={1} />
@@ -267,10 +277,7 @@ function Cert8130Doc({ p }: { p: Cert8130Payload }) {
             I certify that the work identified in this document was performed in accordance with the requirements of 14 CFR Part 43 and/or the applicable airworthiness requirements and that the item identified above is approved for return to service.
           </Text>
           <View style={base.signatureBlock}>
-            <View style={base.sigField}>
-              <View style={base.sigLine}><Text style={{ color: '#fff' }}>_</Text></View>
-              <Text style={base.sigLabel}>Authorized Signature</Text>
-            </View>
+            <SigField label="Authorized Signature" signatureImageUrl={p.signatureImageUrl} />
             <Field label="Certificate No." value={p.mechanicCertNumber} flex={1} />
             <Field label="Name (Print)" value={p.certifyingTechnician} flex={1} />
             <Field label="Date" value={fmt(p.issuedAt)} flex={1} />
@@ -353,10 +360,10 @@ function MaintenanceReleaseDoc({ p }: { p: MaintenanceReleasePayload }) {
           </Text>
           {p.technicians.map((tech, i) => (
             <View key={i} style={[base.signatureBlock, { marginTop: i > 0 ? 8 : 0 }]}>
-              <View style={base.sigField}>
-                <View style={base.sigLine}><Text style={{ color: '#fff' }}>_</Text></View>
-                <Text style={base.sigLabel}>Signature — {tech.name}</Text>
-              </View>
+              <SigField
+                label={`Signature — ${tech.name}`}
+                signatureImageUrl={i === 0 ? p.signatureImageUrl : undefined}
+              />
               <Field label="A&P / IA Cert(s)" value={tech.certifications?.join(', ')} flex={1} />
               <Field label="Date" value={fmt(p.issuedAt)} flex={1} />
             </View>
@@ -415,10 +422,7 @@ function LogbookEntryDoc({ p }: { p: LogbookEntryPayload }) {
             I certify that this aircraft has been inspected in accordance with the applicable maintenance requirements and is approved for return to service.
           </Text>
           <View style={base.signatureBlock}>
-            <View style={base.sigField}>
-              <View style={base.sigLine}><Text style={{ color: '#fff' }}>_</Text></View>
-              <Text style={base.sigLabel}>Signature</Text>
-            </View>
+            <SigField label="Signature" signatureImageUrl={p.signatureImageUrl} />
             <Field label="Name (Print)" value={p.technicianName} flex={1} />
             <Field label="Cert(s)" value={p.certifications?.join(', ')} flex={1} />
             <Field label="Date" value={fmt(p.issuedAt)} flex={1} />

@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { FileText, Plus, ExternalLink, Loader2, XCircle, Download } from 'lucide-react';
+import { FileText, Plus, Loader2, XCircle, Download, PenLine } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { hasRole } from '@/lib/rbac';
+import { SignatureCapture } from '@/components/SignatureCapture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ interface Doc {
   documentNumber: string;
   status: 'DRAFT' | 'ISSUED' | 'VOID';
   pdfUrl: string | null;
+  signatureImageUrl: string | null;
   issuedAt: string | null;
   voidedAt: string | null;
   voidReason: string | null;
@@ -122,6 +124,25 @@ function useVoidDocument(workOrderId: string) {
   });
 }
 
+function useSignDocument(workOrderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ docId, signatureImageUrl, signerName }: { docId: string; signatureImageUrl: string; signerName?: string }) => {
+      const res = await fetch(`/api/documents/${docId}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureImageUrl, signerName }),
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error ?? 'Failed to sign document');
+      }
+      return (await res.json() as { data: Doc }).data;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['wo-documents', workOrderId] }); },
+  });
+}
+
 // ─── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
@@ -134,6 +155,83 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${cls}`}>
       {status}
     </span>
+  );
+}
+
+// ─── Sign dialog ──────────────────────────────────────────────────────────────
+
+function SignDialog({ doc, workOrderId, onClose }: { doc: Doc | null; workOrderId: string; onClose: () => void }) {
+  const [captured, setCaptured] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const sign = useSignDocument(workOrderId);
+
+  async function handleSign() {
+    if (!doc || !captured) return;
+    setError('');
+    try {
+      // Upload the signature image to blob storage first
+      const uploadRes = await fetch('/api/signatures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: captured }),
+      });
+      if (!uploadRes.ok) throw new Error('Failed to upload signature');
+      const { url: signatureImageUrl } = await uploadRes.json() as { url: string };
+
+      await sign.mutateAsync({ docId: doc.id, signatureImageUrl });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sign failed');
+    }
+  }
+
+  function handleClose() {
+    setCaptured(null);
+    setError('');
+    onClose();
+  }
+
+  return (
+    <Dialog open={!!doc} onOpenChange={v => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Sign Document — {doc?.documentNumber}</DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-3">
+          <p className="text-xs text-content-muted">
+            Your signature will be embedded in the PDF and the document will be marked <strong>ISSUED</strong>.
+            This action cannot be undone (only VOID is available after signing).
+          </p>
+          {!captured ? (
+            <SignatureCapture
+              onCapture={url => setCaptured(url)}
+              onClear={() => setCaptured(null)}
+            />
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-xs">Signature preview</Label>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={captured} alt="Signature preview" className="w-full rounded border border-border-muted bg-white" style={{ height: 90, objectFit: 'contain' }} />
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setCaptured(null)}>
+                Re-draw
+              </Button>
+            </div>
+          )}
+          {error && <p className="text-xs text-intent-danger">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose} disabled={sign.isPending}>Cancel</Button>
+          <Button
+            onClick={handleSign}
+            disabled={!captured || sign.isPending}
+            className="gap-1.5"
+          >
+            {sign.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PenLine className="h-3.5 w-3.5" />}
+            {sign.isPending ? 'Signing…' : 'Sign & Issue'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -339,6 +437,7 @@ export function DocumentsTab({ workOrderId, complianceItems = [], partRequests =
   const { data: docs = [], isLoading } = useDocuments(workOrderId);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [voidDoc, setVoidDoc] = useState<Doc | null>(null);
+  const [signDoc, setSignDoc] = useState<Doc | null>(null);
   const currentUser = useCurrentUser();
   const canGenerate = hasRole(currentUser?.role, 'MANAGER');
 
@@ -396,6 +495,14 @@ export function DocumentsTab({ workOrderId, complianceItems = [], partRequests =
                   <Download className="h-3 w-3" />PDF
                 </Button>
               )}
+              {doc.status === 'DRAFT' && (
+                <Button
+                  variant="outline" size="sm" className="h-7 text-xs gap-1 text-intent-primary border-intent-primary/40 hover:bg-intent-primary/10"
+                  onClick={() => setSignDoc(doc)}
+                >
+                  <PenLine className="h-3 w-3" />Sign
+                </Button>
+              )}
               {doc.status === 'ISSUED' && canGenerate && (
                 <Button
                   variant="ghost" size="sm" className="h-7 w-7 p-0 text-content-muted hover:text-intent-danger"
@@ -418,6 +525,7 @@ export function DocumentsTab({ workOrderId, complianceItems = [], partRequests =
         partRequests={partRequests}
       />
       <VoidDialog doc={voidDoc} onClose={() => setVoidDoc(null)} />
+      <SignDialog doc={signDoc} workOrderId={workOrderId} onClose={() => setSignDoc(null)} />
     </div>
   );
 }

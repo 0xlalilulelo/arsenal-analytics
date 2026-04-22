@@ -27,6 +27,7 @@ export interface Form337Payload {
   // Certifying
   certifyingTechnician?: string;
   mechanicCertNumber?: string;
+  signatureImageUrl?: string;
 }
 
 export interface Cert8130Payload {
@@ -55,6 +56,7 @@ export interface Cert8130Payload {
   certifyingTechnician?: string;
   mechanicCertNumber?: string;
   remarks?: string;
+  signatureImageUrl?: string;
 }
 
 export interface MaintenanceReleasePayload {
@@ -78,6 +80,7 @@ export interface MaintenanceReleasePayload {
   stationAddress?: string;
   // Technicians
   technicians: Array<{ name: string; certifications?: string[] }>;
+  signatureImageUrl?: string;
 }
 
 export interface LogbookEntryPayload {
@@ -97,6 +100,7 @@ export interface LogbookEntryPayload {
   // Technician
   technicianName?: string;
   certifications?: string[];
+  signatureImageUrl?: string;
   // Station
   stationName: string;
   stationCertNumber?: string;
