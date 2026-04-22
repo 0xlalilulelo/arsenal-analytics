@@ -42,6 +42,12 @@ const SETTINGS_NAV = [
     title: 'Parts Markup Rules',
     description: 'Sliding-scale markup tiers by part cost — 5 configurable bands with live preview',
   },
+  {
+    href: '/settings/certifications',
+    icon: <CheckCircle2 className="h-5 w-5" />,
+    title: 'Certifications',
+    description: 'Certification catalog, task-level requirements, and technician qualification tracking',
+  },
 ];
 
 function useSaveStatus() {

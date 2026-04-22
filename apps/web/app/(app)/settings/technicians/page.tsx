@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { formatCurrency } from '@/lib/utils';
 import { useTechnicians } from '@/hooks/useAnalytics';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { Plus, Pencil, Loader2, X } from 'lucide-react';
+import { Plus, Pencil, Loader2, X, Award } from 'lucide-react';
 
 function useUtilization() {
   return useQuery({
@@ -239,9 +240,16 @@ export default function TechniciansPage() {
                       {util?.margin != null ? `${util.margin.toFixed(0)}%` : costRateVal > 0 ? `${(((billRateVal - costRateVal) / billRateVal) * 100).toFixed(0)}%` : '—'}
                     </td>
                     <td className="py-3 px-4">
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tech)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Link href={`/settings/technicians/${tech.id}/certifications`}>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Manage certifications">
+                            <Award className="h-3.5 w-3.5" />
+                          </Button>
+                        </Link>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tech)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
