@@ -31,6 +31,7 @@ model Organization {
   featureToolCrib       Boolean @default(false)
   featureTraceability   Boolean @default(false)
   featureQualifications Boolean @default(false)
+  featureTaskCards      Boolean @default(false)
 
   laborRates           LaborRate[]
   technicians          Technician[]
@@ -51,6 +52,7 @@ model Organization {
   tools                Tool[]
   certifications       Certification[]
   taskCertRequirements TaskCertificationRequirement[]
+  taskCardTemplates    TaskCardTemplate[]
 }
 
 // ─── Auth (NextAuth v5 / Auth.js) ────────────────────────────────────────────
@@ -1127,4 +1129,35 @@ model TaskCertificationRequirement {
 
   @@index([orgId, workOrderType])
   @@index([orgId, taskPattern])
+}
+
+// ─── P2-9: Task Card Template Library ────────────────────────────────────────
+
+model TaskCardTemplate {
+  id            String         @id @default(cuid())
+  orgId         String
+  org           Organization   @relation(fields: [orgId], references: [id])
+  name          String
+  description   String?
+  category      String?        // free-text grouping e.g. "100hr", "Annual", "Engine Run-up"
+  workOrderType WorkOrderType? // optional default WO type filter
+  steps         TaskCardTemplateStep[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, workOrderType])
+}
+
+model TaskCardTemplateStep {
+  id           String           @id @default(cuid())
+  templateId   String
+  template     TaskCardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sortOrder    Int              @default(0)
+  taskNumber   String
+  description  String
+  referenceDoc String?
+  estHours     Float            @default(0)
+
+  @@index([templateId])
 }

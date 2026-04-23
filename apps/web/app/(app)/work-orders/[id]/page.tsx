@@ -28,7 +28,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Clock, Package, FileText,
   ChevronLeft, ClipboardList, Wrench, Shield, History, AlertCircle, Loader2,
-  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw, Mail, ScrollText,
+  PackageCheck, Hammer, Pencil, Trash2, ShieldCheck, RotateCcw, Mail, ScrollText, Library,
 } from 'lucide-react';
 
 const WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'AWAITING_PARTS', 'AWAITING_APPROVAL', 'COMPLETE', 'INVOICED', 'CLOSED'];
@@ -52,6 +52,7 @@ export default function WorkOrderDetailPage() {
   const [milestoneOpen, setMilestoneOpen] = useState(false);
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [woEditOpen, setWoEditOpen] = useState(false);
   const [deleteComplianceId, setDeleteComplianceId] = useState<string | null>(null);
   const [editLaborEntry, setEditLaborEntry] = useState<{ id: string; hours: number; description: string | null; billable: boolean; date: string } | null>(null);
@@ -537,9 +538,14 @@ export default function WorkOrderDetailPage() {
                 <Card className="lg:col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm">Task Cards</CardTitle>
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setAddTaskOpen(true)}>
-                      <span className="text-base leading-none">+</span> Add Task
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setApplyTemplateOpen(true)}>
+                        <Library className="h-3 w-3" /> Template
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setAddTaskOpen(true)}>
+                        <span className="text-base leading-none">+</span> Add Task
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="p-0">
                     {wo.lineItems.length === 0 ? (
@@ -1676,6 +1682,107 @@ export default function WorkOrderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Apply Template Dialog */}
+      {wo && <ApplyTemplateDialog open={applyTemplateOpen} onClose={() => setApplyTemplateOpen(false)} workOrderId={wo.id} />}
     </div>
+  );
+}
+
+// ─── Apply Template Dialog (loaded lazily so it doesn't bloat initial bundle) ─
+
+interface TemplateOption {
+  id: string;
+  name: string;
+  category: string | null;
+  workOrderType: string | null;
+  steps: { id: string }[];
+}
+
+function ApplyTemplateDialog({ open, onClose, workOrderId }: { open: boolean; onClose: () => void; workOrderId: string }) {
+  const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState('');
+  const [error, setError] = useState('');
+
+  const { data: templates = [], isLoading } = useQuery<TemplateOption[]>({
+    queryKey: ['task-card-templates'],
+    queryFn: async () => {
+      const res = await fetch('/api/task-card-templates');
+      if (!res.ok) throw new Error('Failed to load templates');
+      return (await res.json() as { data: TemplateOption[] }).data;
+    },
+    enabled: open,
+  });
+
+  const { mutateAsync, isPending } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/work-orders/${workOrderId}/apply-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: selectedId }),
+      });
+      if (!res.ok) throw new Error((await res.json() as { error?: string }).error ?? 'Failed');
+      return res.json() as Promise<{ data: { applied: number } }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['work-order', workOrderId] });
+      setSelectedId('');
+      setError('');
+      onClose();
+      // Brief flash of success is enough — the line items appear in the task list
+      void result;
+    },
+    onError: (e) => setError((e as Error).message),
+  });
+
+  const selected = templates.find(t => t.id === selectedId);
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) { setSelectedId(''); setError(''); onClose(); } }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Apply Task Card Template</DialogTitle>
+          <DialogDescription>
+            All steps in the selected template will be added as line items to this work order.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          {isLoading ? (
+            <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-content-muted" /></div>
+          ) : templates.length === 0 ? (
+            <p className="text-sm text-content-muted text-center py-4">
+              No templates found. Create one in{' '}
+              <a href="/settings/task-cards" className="text-intent-primary hover:underline">Settings → Task Cards</a>.
+            </p>
+          ) : (
+            <div>
+              <Label className="text-xs">Template</Label>
+              <Select value={selectedId} onValueChange={setSelectedId}>
+                <SelectTrigger className="mt-1.5 text-sm"><SelectValue placeholder="Select a template…" /></SelectTrigger>
+                <SelectContent>
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id} className="text-sm">
+                      {t.category ? `[${t.category}] ` : ''}{t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selected && (
+                <p className="text-xs text-content-muted mt-1.5">
+                  {selected.steps.length} step{selected.steps.length !== 1 ? 's' : ''} will be added.
+                </p>
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-intent-danger">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setSelectedId(''); setError(''); onClose(); }}>Cancel</Button>
+          <Button size="sm" className="h-8 text-xs gap-1" onClick={() => mutateAsync()} disabled={!selectedId || isPending}>
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Apply
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

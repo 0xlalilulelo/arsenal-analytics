@@ -19,8 +19,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
-  ChevronLeft, Plus, Loader2, AlertTriangle, Trash2, FileText, Package,
+  ChevronLeft, Plus, Loader2, AlertTriangle, Trash2, FileText, Package, Tag,
 } from 'lucide-react';
+import { PrintLabelDialog } from '@/components/PrintLabelDialog';
+import type { PartLabelData } from '@mro/core';
 
 const CONDITIONS = ['NEW', 'OH', 'SV', 'AR'] as const;
 type Condition = typeof CONDITIONS[number];
@@ -265,9 +267,15 @@ function DeleteLotDialog({
   );
 }
 
-function LotsTab({ partId, partCondition }: { partId: string; partCondition: Condition }) {
+function LotsTab({ partId, partCondition, partNumber, partDescription }: {
+  partId: string;
+  partCondition: Condition;
+  partNumber: string;
+  partDescription: string;
+}) {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteLot, setDeleteLot] = useState<Lot | null>(null);
+  const [labelLot, setLabelLot] = useState<Lot | null>(null);
   const { data, isLoading } = useLots(partId);
   const lots = data?.data ?? [];
 
@@ -388,12 +396,20 @@ function LotsTab({ partId, partCondition }: { partId: string; partCondition: Con
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost" size="sm" className="h-7 w-7 p-0"
-                          onClick={() => setDeleteLot(lot)} title="Delete lot"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-content-muted hover:text-intent-danger" />
-                        </Button>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button
+                            variant="ghost" size="sm" className="h-7 w-7 p-0 text-content-muted"
+                            onClick={() => setLabelLot(lot)} title="Print label"
+                          >
+                            <Tag className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="sm" className="h-7 w-7 p-0"
+                            onClick={() => setDeleteLot(lot)} title="Delete lot"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-content-muted hover:text-intent-danger" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -406,6 +422,24 @@ function LotsTab({ partId, partCondition }: { partId: string; partCondition: Con
 
       <AddLotDialog open={addOpen} onClose={() => setAddOpen(false)} partId={partId} partCondition={partCondition} />
       <DeleteLotDialog lot={deleteLot} onClose={() => setDeleteLot(null)} partId={partId} />
+      {labelLot && (
+        <PrintLabelDialog
+          open={!!labelLot}
+          onClose={() => setLabelLot(null)}
+          type="PART"
+          data={{
+            partNumber,
+            description: partDescription,
+            condition: labelLot.condition,
+            qty: labelLot.qtyOnHand,
+            serialNumber: labelLot.serialNumber,
+            lotNumber: labelLot.lotNumber,
+            batchNumber: labelLot.batchNumber,
+            taggedAt: labelLot.createdAt,
+            stationName: '',
+          } satisfies PartLabelData}
+        />
+      )}
     </div>
   );
 }
@@ -480,7 +514,7 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
                 <TabsTrigger value="lots" className="text-xs">Lots & Traceability</TabsTrigger>
               </TabsList>
               <TabsContent value="lots" className="mt-4">
-                <LotsTab partId={part.id} partCondition={part.condition} />
+                <LotsTab partId={part.id} partCondition={part.condition} partNumber={part.partNumber} partDescription={part.description} />
               </TabsContent>
             </Tabs>
           </>

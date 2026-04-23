@@ -14,8 +14,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '@/lib/utils';
 import {
   ChevronLeft, Loader2, PackageCheck, PackageOpen, CheckCircle2,
-  AlertTriangle, FileText, Wrench,
+  AlertTriangle, FileText, Wrench, Tag,
 } from 'lucide-react';
+import { PrintLabelDialog } from '@/components/PrintLabelDialog';
 
 type ToolStatus = 'AVAILABLE' | 'CHECKED_OUT' | 'CALIBRATION_DUE' | 'OUT_OF_SERVICE' | 'LOST';
 
@@ -312,6 +313,7 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
 
   const { mutateAsync: setStatus } = useMutation({
     mutationFn: async (status: ToolStatus) => {
@@ -344,11 +346,18 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
         title={tool ? `${tool.assetTag} — ${tool.name}` : 'Tool'}
         subtitle={tool ? [tool.manufacturer, tool.modelNumber, tool.serialNumber && `SN ${tool.serialNumber}`].filter(Boolean).join(' · ') || '—' : '—'}
         actions={
-          <Link href="/tools">
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
-              <ChevronLeft className="h-3.5 w-3.5" />Back
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            {tool && (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => setLabelOpen(true)}>
+                <Tag className="h-3.5 w-3.5" />Print Label
+              </Button>
+            )}
+            <Link href="/tools">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                <ChevronLeft className="h-3.5 w-3.5" />Back
+              </Button>
+            </Link>
+          </div>
         }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -550,6 +559,19 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
           <CalibrationDialog
             open={calOpen} onClose={() => setCalOpen(false)} toolId={tool.id}
             defaultInterval={tool.calibrationIntervalMonths}
+          />
+          <PrintLabelDialog
+            open={labelOpen}
+            onClose={() => setLabelOpen(false)}
+            type="TOOL"
+            data={{
+              assetTag:       tool.assetTag,
+              name:           tool.name,
+              manufacturer:   tool.manufacturer,
+              calibrationDue: tool.nextCalibrationDue,
+              bin:            tool.bin,
+              stationName:    '',
+            }}
           />
         </>
       )}
